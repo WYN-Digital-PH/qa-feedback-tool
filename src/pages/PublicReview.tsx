@@ -16,6 +16,7 @@ import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { defaultReviewDecision, type ReviewDecision } from "@/lib/reviewDecision";
 import { readOrCreateGuestToken } from "@/lib/guestToken";
+import { samePageUrl } from "@/lib/pageUrl";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -420,7 +421,7 @@ export default function PublicReview() {
     setReplies([]);
     setReplyText("");
     if (canvas?.type === "website" && item?.original_page_url) {
-      if (item.original_page_url !== currentUrl) {
+      if (!samePageUrl(item.original_page_url, currentUrl)) {
         pendingScrollPinIdRef.current = item.id;
         setCurrentUrl(item.original_page_url);
       } else {
@@ -469,7 +470,7 @@ export default function PublicReview() {
   // ============ FILTERED COMMENTS for sidebar ============
   const filteredComments = useMemo(() => {
     let list = comments;
-    if (canvas?.type === "website" && sidebarFilter === "page") list = list.filter((c) => c.original_page_url === currentUrl);
+    if (canvas?.type === "website" && sidebarFilter === "page") list = list.filter((c) => samePageUrl(c.original_page_url, currentUrl));
     if (canvas?.type === "pdf" && sidebarFilter === "page") list = list.filter((c) => (c.pdf_page_number ?? 1) === pdfPage);
     if (sidebarFilter === "unresolved") list = list.filter((c) => c.status !== "resolved");
     if (sidebarFilter === "resolved") list = list.filter((c) => c.status === "resolved");
@@ -486,7 +487,7 @@ export default function PublicReview() {
   const pinsForViewer = useMemo(() => {
     let list = comments;
     // Always restrict website pins to current page
-    if (canvas?.type === "website") list = list.filter((c) => !c.original_page_url || c.original_page_url === currentUrl);
+    if (canvas?.type === "website") list = list.filter((c) => !c.original_page_url || samePageUrl(c.original_page_url, currentUrl));
     if (!showResolved) list = list.filter((c) => c.status !== "resolved");
     return list.map((c, i) => ({
       id: c.id,

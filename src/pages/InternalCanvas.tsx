@@ -18,6 +18,7 @@ import PdfReviewCanvas from "@/components/review/PdfReviewCanvas";
 import ReviewSidebar from "@/components/review/ReviewSidebar";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
+import { samePageUrl } from "@/lib/pageUrl";
 import { useAuth } from "@/contexts/AuthContext";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
 
@@ -223,7 +224,7 @@ export default function InternalCanvas() {
   const filtered = useMemo(() => {
     let list = feedback;
     if (!showDeleted) list = list.filter((f) => !f.deleted_at);
-    if (currentPageOnly && canvas?.type === "website") list = list.filter((f) => !f.original_page_url || f.original_page_url === currentUrl);
+    if (currentPageOnly && canvas?.type === "website") list = list.filter((f) => !f.original_page_url || samePageUrl(f.original_page_url, currentUrl));
     if (currentPageOnly && canvas?.type === "pdf") list = list.filter((f) => (f.pdf_page_number ?? 1) === pdfPage);
     if (fStatus === "open") list = list.filter((f) => f.status !== "resolved");
     else if (fStatus !== "all") list = list.filter((f) => f.status === fStatus);
@@ -239,7 +240,7 @@ export default function InternalCanvas() {
 
   const pinsOnPage = useMemo(() => {
     let list = feedback.filter((f) => !f.deleted_at);
-    if (canvas?.type === "website") list = list.filter((f) => !f.original_page_url || f.original_page_url === currentUrl);
+    if (canvas?.type === "website") list = list.filter((f) => !f.original_page_url || samePageUrl(f.original_page_url, currentUrl));
     else if (canvas?.type === "pdf") list = list.filter((f) => (f.pdf_page_number ?? 1) === pdfPage);
     if (fStatus === "open") list = list.filter((f) => f.status !== "resolved");
     else if (fStatus !== "all") list = list.filter((f) => f.status === fStatus);
@@ -356,7 +357,7 @@ export default function InternalCanvas() {
   function focusItem(item: any) {
     setSelectedId(item.id);
     if (canvas?.type === "website") {
-      if (item.original_page_url && item.original_page_url !== currentUrl) {
+      if (item.original_page_url && !samePageUrl(item.original_page_url, currentUrl)) {
         // Queue the scroll — will fire after iframe sends `pin-ready`.
         pendingScrollPinIdRef.current = item.id;
         setCurrentUrl(item.original_page_url);
