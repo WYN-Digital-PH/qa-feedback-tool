@@ -1,0 +1,264 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   DESIGN TOKENS
+   --------------------------------------------------------------------------
+   Every colour, font and radius in the app resolves to one of these tokens —
+   no component should hardcode a hex value or a Tailwind palette colour
+   (`bg-slate-900`, `text-blue-300`, …).
+
+   To rebrand for another agency, edit the BRAND block below. Everything else
+   is derived from it, so a new accent colour propagates to buttons, focus
+   rings, links, the sidebar, review pins and charts in one edit.
+
+   Colours are stored as bare HSL channels ("240 100% 23%") because Tailwind
+   wraps them in hsl(var(--token) / <alpha>) so that `/40` opacity modifiers
+   work on every utility.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* ---------------------------------------------------------------------
+       BRAND — the rebranding surface. Change these, not the tokens below.
+       --------------------------------------------------------------------- */
+
+    /* Primary accent. Currently navy #000075. */
+    --brand: 240 100% 23%;
+    --brand-foreground: 0 0% 100%;
+    /* A lighter step of the accent, for hovers, gradients and dark surfaces. */
+    --brand-glow: 240 100% 33%;
+    /* Neutral hue the greys are mixed from — keeps greys in tune with the accent. */
+    --brand-neutral-hue: 220;
+    /* Darkest brand surface, used for the app sidebar. */
+    --brand-shade: 222 25% 12%;
+
+    /* Typography. Any font loaded in index.html can be named here. */
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+
+    /* Corner radius for cards, inputs and buttons. */
+    --radius: 0.625rem;
+
+    /* ---------------------------------------------------------------------
+       SEMANTIC TOKENS — derived from the brand block. Rarely edited directly.
+       --------------------------------------------------------------------- */
+
+    --background: 0 0% 100%;
+    --foreground: 222 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 25% 12%;
+
+    --primary: var(--brand);
+    --primary-foreground: var(--brand-foreground);
+    --primary-glow: var(--brand-glow);
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 25% 12%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 25% 12%;
+
+    /* Feedback states. Used by status badges, toasts and alerts. */
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 65% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Workflow status hues. Every status gets its own colour so a board column
+       or a badge reads before the label does. These are deliberately NOT
+       derived from --brand: they encode workflow meaning (danger, done,
+       waiting), which should stay legible whatever accent an agency picks.
+       Ordered as work moves: waiting -> being looked at -> owned -> done. */
+    --status-new: 38 92% 50%;
+    --status-in-review: 199 89% 48%;
+    --status-assigned: 262 83% 58%;
+    --status-in-progress: 217 91% 60%;
+    --status-ready-for-qa: 173 80% 36%;
+    --status-changes-needed: 0 75% 55%;
+    --status-resolved: 142 65% 38%;
+    --status-closed: 220 9% 46%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: var(--brand);
+
+    --surface-elevated: 0 0% 100%;
+    --surface-subtle: 220 14% 98%;
+
+    --shadow-sm: 0 1px 2px 0 hsl(222 25% 12% / 0.05);
+    --shadow-md: 0 4px 12px -2px hsl(222 25% 12% / 0.08);
+    --shadow-lg: 0 12px 32px -8px hsl(222 25% 12% / 0.12);
+    /* Pins sit on top of arbitrary client websites, so they need a harder
+       shadow than app surfaces to stay readable on any background. */
+    --shadow-pin: 0 4px 12px hsl(222 25% 12% / 0.3);
+
+    /* App sidebar — a dark brand surface with the accent for the active item. */
+    --sidebar-background: var(--brand-shade);
+    --sidebar-foreground: 220 14% 88%;
+    --sidebar-primary: var(--brand-glow);
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 22% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 20% 22%;
+    --sidebar-ring: var(--brand-glow);
+
+    /* Review pins. `pin` is a client-visible comment, `pin-internal` a team-only
+       note, `pin-resolved` a closed one. These are also pushed into the proxied
+       website iframe so pins there match the app. */
+    --pin: var(--brand);
+    --pin-foreground: 0 0% 100%;
+    --pin-internal: var(--warning);
+    --pin-resolved: 220 9% 46%;
+  }
+
+  .dark {
+    --background: 222 25% 8%;
+    --foreground: 220 14% 95%;
+
+    --card: 222 22% 12%;
+    --card-foreground: 220 14% 95%;
+
+    --popover: 222 22% 12%;
+    --popover-foreground: 220 14% 95%;
+
+    --primary: var(--brand-glow);
+    --primary-foreground: var(--brand-foreground);
+    --primary-glow: 240 100% 43%;
+
+    --secondary: 222 20% 18%;
+    --secondary-foreground: 220 14% 95%;
+
+    --muted: 222 20% 18%;
+    --muted-foreground: 220 9% 65%;
+
+    --accent: 222 20% 18%;
+    --accent-foreground: 220 14% 95%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 65% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Lifted so they hold contrast on the dark canvas. */
+    --status-new: 38 92% 58%;
+    --status-in-review: 199 89% 58%;
+    --status-assigned: 262 83% 68%;
+    --status-in-progress: 217 91% 68%;
+    --status-ready-for-qa: 173 70% 46%;
+    --status-changes-needed: 0 75% 63%;
+    --status-resolved: 142 60% 48%;
+    --status-closed: 220 9% 62%;
+
+    --border: 222 20% 22%;
+    --input: 222 20% 22%;
+    --ring: var(--brand-glow);
+
+    --surface-elevated: 222 22% 12%;
+    --surface-subtle: 222 22% 10%;
+
+    --pin: var(--brand-glow);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    /* Inter character variants: straight-sided l, open 4/9, single-storey g. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Headings inherit the sans stack; sizes come from utilities so the type
+     scale stays visible in the markup. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+    text-wrap: balance;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer components {
+  /* Two card elevations — `surface-card` for content in place, `surface-elevated`
+     for things that float above the page (dialogs, auth panels, error cards). */
+  .surface-card {
+    @apply bg-card border border-border rounded-xl;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .surface-elevated {
+    @apply bg-card border border-border rounded-xl;
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Review pin marker. Shared by the in-app canvases and, via the same colour
+   tokens, by the overlay injected into proxied websites.
+   -------------------------------------------------------------------------- */
+.phlash-pin {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px 999px 999px 2px;
+  background: hsl(var(--pin));
+  color: hsl(var(--pin-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--shadow-pin);
+  cursor: pointer;
+  transform: translate(-2px, -26px);
+  z-index: 2147483600;
+  border: 2px solid hsl(var(--pin-foreground));
+}
+
+.phlash-pin:hover {
+  transform: translate(-2px, -26px) scale(1.08);
+}
+
+.phlash-pin--internal {
+  background: hsl(var(--pin-internal));
+}
+
+.phlash-pin--resolved {
+  background: hsl(var(--pin-resolved));
+  opacity: 0.6;
+}

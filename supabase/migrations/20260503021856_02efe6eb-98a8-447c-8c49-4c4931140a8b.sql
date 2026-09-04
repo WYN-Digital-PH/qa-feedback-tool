@@ -1,0 +1,2 @@
+ALTER TABLE public.feedback_items ADD COLUMN IF NOT EXISTS is_internal boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_feedback_items_canvas_internal ON public.feedback_items(canvas_id, is_internal);

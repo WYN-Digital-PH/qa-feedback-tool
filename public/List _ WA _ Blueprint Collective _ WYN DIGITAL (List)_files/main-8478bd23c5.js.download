@@ -1,0 +1,1 @@
+import{init_main}from"./main15.js";init_main();

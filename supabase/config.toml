@@ -1,0 +1,28 @@
+project_id = "gqhjvpyibdjxhrowvgkc"
+
+[functions.get-public-canvas]
+verify_jwt = false
+
+[functions.submit-guest-feedback]
+verify_jwt = false
+
+[functions.get-public-canvas-comments]
+verify_jwt = false
+
+[functions.submit-review-decision]
+verify_jwt = false
+
+[functions.proxy-website]
+verify_jwt = false
+
+[functions.submit-guest-reply]
+verify_jwt = false
+
+[functions.get-public-feedback-thread]
+verify_jwt = false
+
+[functions.capture-screenshot]
+verify_jwt = false
+
+[functions.guest-feedback-mutate]
+verify_jwt = false

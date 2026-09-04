@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Branding: the values below are the static fallbacks used before the app
+      boots and by link-preview crawlers. The running app overrides the title
+      and description from `src/config/brand.ts` (VITE_BRAND_* env vars), so
+      when rebranding update both this file and those variables.
+    -->
+    <title>WYN Review</title>
+    <meta name="description" content="A no-login website feedback and approval tool for agency clients." />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="WYN Review" />
+    <meta property="og:description" content="A no-login website feedback and approval tool for agency clients." />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="WYN Review" />
+    <meta name="twitter:description" content="A no-login website feedback and approval tool for agency clients." />
+
+    <!--
+      UI typeface. The family is referenced through the --font-sans token in
+      src/index.css; swap this link and that token together to change it.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
