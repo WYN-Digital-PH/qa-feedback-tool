@@ -22,6 +22,10 @@ const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8").replace(/\r
 const PAGE = read("src/pages/PublicReview.tsx");
 const PROJECT = read("src/pages/ProjectDetail.tsx");
 const FN = read("supabase/functions/get-public-canvas-comments/index.ts");
+const MUTATE = read("supabase/functions/guest-feedback-mutate/index.ts");
+const CANVAS_FN = read("supabase/functions/get-public-canvas/index.ts");
+const SETTINGS = read("src/components/canvas/CanvasSettingsDialog.tsx");
+const DASHBOARD = read("src/pages/Dashboard.tsx");
 
 describe("the finish-review flow is gone", () => {
   it("leaves no button on the guest canvas", () => {
@@ -108,5 +112,54 @@ describe("the public comments endpoint", () => {
     // It is the only thing proving ownership of a pin.
     expect(FN).toMatch(/const \{ guest_token: _gt, \.\.\.rest \} = r;/);
     expect(FN).not.toMatch(/guest_token: r\.guest_token/);
+  });
+});
+
+describe("a closed canvas is closed to guests", () => {
+  /**
+   * "Closed" covers more than the commenting toggle: a paused, completed or
+   * archived canvas is closed too, and so is one past its deadline.
+   * `get-public-canvas` folds all of that into the single `commenting_enabled`
+   * it returns, which is why the page can gate on one value.
+   */
+  it("the endpoint refuses a write on a canvas that is not active", () => {
+    expect(MUTATE).toMatch(/canvas\.status !== "active" \|\| !canvas\.commenting_enabled/);
+    expect(MUTATE).toContain("Commenting is closed");
+  });
+
+  it("the status and the deadline are folded into what the page is told", () => {
+    expect(CANVAS_FN).toMatch(
+      /commenting_enabled: canvas\.commenting_enabled && !deadlinePassed && canvas\.status === "active"/,
+    );
+  });
+
+  it("the page stops offering edit and delete rather than letting them fail", () => {
+    // They used to render regardless: every endpoint refused with a 403, so the
+    // rule held, but a reviewer was invited to edit and told no after trying.
+    expect(PAGE).toMatch(/guestActions=\{canvas\.commenting_enabled \? \{/);
+    expect(PAGE).toMatch(/\} : undefined\}/);
+  });
+
+  it("labels the guest status picker from the shared vocabulary", () => {
+    // It used to call `new` "Active" while every other screen called it "New".
+    expect(PAGE).not.toMatch(/value: "new", label: "Active"/);
+    expect(PAGE).toContain("FEEDBACK_STATUSES.map");
+  });
+});
+
+describe("the sign-off setting is gone with the flow it controlled", () => {
+  it("is not offered in canvas settings or on the project page", () => {
+    expect(SETTINGS).not.toContain("allow_approval");
+    expect(PROJECT).not.toContain("allow_approval");
+    expect(PROJECT).not.toContain("No sign-off");
+  });
+
+  it("is not read by the guest canvas", () => {
+    expect(PAGE).not.toContain("allow_approval");
+  });
+
+  it("takes the approvals tile off the dashboard", () => {
+    expect(DASHBOARD).not.toContain("review_decisions");
+    expect(DASHBOARD).not.toMatch(/label="Approvals"/);
   });
 });

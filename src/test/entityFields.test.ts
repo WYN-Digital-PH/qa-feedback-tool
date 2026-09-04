@@ -45,6 +45,7 @@ const COVERAGE: Coverage[] = [
       client_id: "derived from the project",
       created_by: "audit column, written once",
       file_url: "mirror of canvas_files.public_url, written by the upload function",
+      allow_approval: "the guest sign-off flow was removed; the column is kept so the historical review_decisions rows still make sense, but nothing reads or writes it",
     },
   },
   {
@@ -103,7 +104,6 @@ describe("canvas settings", () => {
       "capture_screenshot",
       "allow_guest_replies",
       "allow_public_comment_view",
-      "allow_approval",
       "require_guest_name",
       "require_guest_email",
     ]) {

@@ -53,7 +53,6 @@ export interface CanvasRecord {
   feedback_deadline: string | null;
   require_guest_name: boolean;
   require_guest_email: boolean;
-  allow_approval: boolean;
   allow_guest_replies: boolean;
   allow_public_comment_view: boolean;
   capture_screenshot: boolean;
@@ -77,7 +76,6 @@ interface FormState {
   feedback_deadline: string;
   require_guest_name: boolean;
   require_guest_email: boolean;
-  allow_approval: boolean;
   allow_guest_replies: boolean;
   allow_public_comment_view: boolean;
   capture_screenshot: boolean;
@@ -110,7 +108,6 @@ function fromCanvas(c: CanvasRecord): FormState {
     feedback_deadline: toLocalInput(c.feedback_deadline ?? null),
     require_guest_name: c.require_guest_name ?? true,
     require_guest_email: c.require_guest_email ?? false,
-    allow_approval: c.allow_approval ?? true,
     allow_guest_replies: c.allow_guest_replies ?? true,
     allow_public_comment_view: c.allow_public_comment_view ?? true,
     capture_screenshot: c.capture_screenshot ?? true,
@@ -185,7 +182,6 @@ export default function CanvasSettingsDialog({ canvas, onOpenChange, onSaved }: 
       feedback_deadline: fromLocalInput(form.feedback_deadline),
       require_guest_name: form.require_guest_name,
       require_guest_email: form.require_guest_email,
-      allow_approval: form.allow_approval,
       allow_guest_replies: form.allow_guest_replies,
       allow_public_comment_view: form.allow_public_comment_view,
       capture_screenshot: form.capture_screenshot,
@@ -302,11 +298,6 @@ export default function CanvasSettingsDialog({ canvas, onOpenChange, onSaved }: 
                   id="show-comments" label="Show other comments"
                   help="Off keeps each guest's feedback private to them — useful with several stakeholders."
                   checked={form.allow_public_comment_view} onChange={(v) => set("allow_public_comment_view", v)}
-                />
-                <Toggle
-                  id="allow-approval" label="Allow approve / request changes"
-                  help="Shows the sign-off buttons on the review canvas."
-                  checked={form.allow_approval} onChange={(v) => set("allow_approval", v)}
                 />
               </div>
             </div>

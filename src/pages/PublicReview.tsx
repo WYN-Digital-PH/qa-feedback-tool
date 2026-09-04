@@ -16,6 +16,7 @@ import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { readOrCreateGuestToken } from "@/lib/guestToken";
 import { samePageUrl } from "@/lib/pageUrl";
+import { FEEDBACK_STATUSES, humanize } from "@/lib/feedbackMeta";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -50,7 +51,6 @@ interface Canvas {
   require_guest_email: boolean;
   allow_guest_replies: boolean;
   allow_public_comment_view: boolean;
-  allow_approval: boolean;
   capture_screenshot: boolean;
   proxy_enabled: boolean;
   widget_fallback_enabled: boolean;
@@ -477,19 +477,26 @@ export default function PublicReview() {
       replyText={replyText}
       setReplyText={setReplyText}
       onSubmitReply={submitReply}
-      guestActions={{
-        guestStatuses: [
-          { value: "new", label: "Active" },
-          { value: "in_progress", label: "In progress" },
-          { value: "ready_for_qa", label: "Ready for QA" },
-          { value: "resolved", label: "Resolved" },
-        ],
+      /*
+        Editing is offered only while the canvas is open to guests.
+
+        `commenting_enabled` as returned by `get-public-canvas` already folds in
+        the canvas status and the deadline, so this covers paused, completed and
+        archived canvases as well as an explicitly closed one. These controls
+        used to render regardless: every endpoint behind them refused with a 403,
+        so the rule held, but the reviewer was invited to edit a comment on a
+        closed canvas and told no only after trying.
+      */
+      guestActions={canvas.commenting_enabled ? {
+        // Labelled from the shared vocabulary — this list used to call `new`
+        // "Active" while every other screen called it "New".
+        guestStatuses: FEEDBACK_STATUSES.map((value) => ({ value, label: humanize(value) })),
         onEditFeedback: (id, value) => guestMutate("feedback", id, "edit", value),
         onDeleteFeedback: (id) => guestMutate("feedback", id, "delete"),
         onSetStatus: (id, value) => guestMutate("feedback", id, "set_status", value),
         onEditReply: (id, value) => guestMutate("reply", id, "edit", value),
         onDeleteReply: (id) => guestMutate("reply", id, "delete"),
-      }}
+      } : undefined}
     />
   );
 

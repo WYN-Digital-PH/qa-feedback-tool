@@ -61,7 +61,7 @@ export default function ProjectDetail() {
   const [form, setForm] = useState({
     name: "", website_url: "", staging_url: "",
     require_guest_name: true, require_guest_email: false,
-    allow_approval: true, allow_public_comment_view: true, allow_guest_replies: true,
+    allow_public_comment_view: true, allow_guest_replies: true,
   });
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -139,7 +139,6 @@ export default function ProjectDetail() {
       staging_url: type === "website" ? (form.staging_url || null) : null,
       require_guest_name: form.require_guest_name,
       require_guest_email: form.require_guest_email,
-      allow_approval: form.allow_approval,
       allow_public_comment_view: form.allow_public_comment_view,
       allow_guest_replies: form.allow_guest_replies,
       created_by: user?.id,
@@ -178,7 +177,7 @@ export default function ProjectDetail() {
 
     setSaving(false);
     toast.success("Canvas created");
-    setForm({ name: "", website_url: "", staging_url: "", require_guest_name: true, require_guest_email: false, allow_approval: true, allow_public_comment_view: true, allow_guest_replies: true });
+    setForm({ name: "", website_url: "", staging_url: "", require_guest_name: true, require_guest_email: false, allow_public_comment_view: true, allow_guest_replies: true });
     setFile(null);
     setType("website");
     setOpen(false);
@@ -375,8 +374,7 @@ export default function ProjectDetail() {
               <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between"><Label htmlFor="rgn" className="font-normal">Require guest name</Label><Switch id="rgn" checked={form.require_guest_name} onCheckedChange={(v) => setForm({ ...form, require_guest_name: v })} /></div>
                 <div className="flex items-center justify-between"><Label htmlFor="rge" className="font-normal">Require guest email</Label><Switch id="rge" checked={form.require_guest_email} onCheckedChange={(v) => setForm({ ...form, require_guest_email: v })} /></div>
-                <div className="flex items-center justify-between"><Label htmlFor="aa" className="font-normal">Allow Approve / Request Changes</Label><Switch id="aa" checked={form.allow_approval} onCheckedChange={(v) => setForm({ ...form, allow_approval: v })} /></div>
-                <div className="flex items-center justify-between"><Label htmlFor="agr" className="font-normal">Allow guest replies on threads</Label><Switch id="agr" checked={form.allow_guest_replies} onCheckedChange={(v) => setForm({ ...form, allow_guest_replies: v })} /></div>
+                                <div className="flex items-center justify-between"><Label htmlFor="agr" className="font-normal">Allow guest replies on threads</Label><Switch id="agr" checked={form.allow_guest_replies} onCheckedChange={(v) => setForm({ ...form, allow_guest_replies: v })} /></div>
                 <div className="flex items-center justify-between"><Label htmlFor="pcv" className="font-normal">Show comments to guests</Label><Switch id="pcv" checked={form.allow_public_comment_view} onCheckedChange={(v) => setForm({ ...form, allow_public_comment_view: v })} /></div>
               </div>
               <Button type="submit" disabled={saving} className="w-full">{saving ? "Creating…" : "Create canvas"}</Button>
@@ -466,7 +464,6 @@ export default function ProjectDetail() {
                       )}
                       {c.require_guest_email && <span>Email required</span>}
                       {!c.allow_public_comment_view && <span>Comments private per guest</span>}
-                      {!c.allow_approval && <span>No sign-off</span>}
                       {c.type === "website" && !c.proxy_enabled && <span className="text-warning">Proxy off</span>}
                       <span>Added {new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
