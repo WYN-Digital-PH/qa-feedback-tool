@@ -543,6 +543,7 @@ export default function PublicReview() {
       mode="public"
       items={filteredComments as any}
       totalCount={comments.length}
+      onClearFilters={() => { setSidebarFilter("all"); setSidebarSearch(""); }}
       search={sidebarSearch}
       setSearch={setSidebarSearch}
       filterValue={sidebarFilter}
@@ -844,7 +845,7 @@ export default function PublicReview() {
                 </div>
                 <ul className="max-h-52 overflow-y-auto divide-y divide-border">
                   {myComments.map((c) => {
-                    const resolved = c.status === "resolved" || c.status === "closed";
+                    const resolved = c.status === "resolved";
                     let page = "";
                     try { page = c.original_page_url ? new URL(c.original_page_url).pathname : ""; }
                     catch { page = c.original_page_url ?? ""; }

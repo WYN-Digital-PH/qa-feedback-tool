@@ -75,7 +75,7 @@ The `--status-*` block sits just below the semantic tokens and is deliberately
 
 These encode workflow meaning — waiting, in hand, needs attention, done — which
 has to stay legible whatever accent an agency picks. Tinting them all towards a
-single brand hue is what made "In review", "Assigned" and "In progress" read
+single brand hue is what made "New", "In progress" and "Ready for QA" read
 identically before. Retune them if your board uses different language, but keep
 them distinguishable from each other.
 

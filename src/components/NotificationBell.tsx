@@ -71,6 +71,9 @@ export default function NotificationBell() {
         .from("feedback_items")
         .select("id, comment, guest_name, created_at, project_id, created_by_type")
         .eq("created_by_type", "guest")
+        // A comment the client has since deleted should stop notifying about
+        // itself; the row is still there, only stamped.
+        .is("deleted_at", null)
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(20),
@@ -79,6 +82,7 @@ export default function NotificationBell() {
         .select("id, body, guest_name, created_at, feedback_item_id, is_internal, user_id")
         .eq("is_internal", false)
         .is("user_id", null)
+        .is("deleted_at", null)
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(20),

@@ -109,7 +109,7 @@ function CanvasMock() {
               <div className="flex items-center gap-1.5">
                 <span className="grid place-items-center w-4 h-4 rounded-full bg-pin text-pin-foreground text-[9px] font-bold">2</span>
                 <span className="text-[11px] font-medium">Dana</span>
-                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-status-assigned/15 text-status-assigned font-medium">Assigned</span>
+                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded bg-status-in-progress/15 text-status-in-progress font-medium">Assigned</span>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1.5 leading-snug">
                 The CTA should be our brand navy, not blue.

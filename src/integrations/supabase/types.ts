@@ -942,15 +942,7 @@ export type Database = {
         | "performance"
         | "other"
       feedback_priority: "low" | "normal" | "high" | "urgent"
-      feedback_status:
-        | "new"
-        | "in_review"
-        | "assigned"
-        | "in_progress"
-        | "ready_for_qa"
-        | "changes_needed"
-        | "resolved"
-        | "closed"
+      feedback_status: "new" | "in_progress" | "ready_for_qa" | "resolved"
       review_decision_type: "approved" | "changes_requested"
     }
     CompositeTypes: {
@@ -1094,16 +1086,7 @@ export const Constants = {
         "other",
       ],
       feedback_priority: ["low", "normal", "high", "urgent"],
-      feedback_status: [
-        "new",
-        "in_review",
-        "assigned",
-        "in_progress",
-        "ready_for_qa",
-        "changes_needed",
-        "resolved",
-        "closed",
-      ],
+      feedback_status: ["new", "in_progress", "ready_for_qa", "resolved"],
       review_decision_type: ["approved", "changes_requested"],
     },
   },

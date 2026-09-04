@@ -11,54 +11,51 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { ACTIVE_STATUSES, FEEDBACK_STATUSES } from "@/lib/feedbackMeta";
+import { ACTIVE_STATUSES, FEEDBACK_STATUSES, assignmentLabel, isAssigned } from "@/lib/feedbackMeta";
 
 const ROOT = path.resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8").replace(/\r\n/g, "\n");
 
 const MIGRATION = read("supabase/migrations/20260825180000_assignment_notifications.sql");
 const PERMISSIONS_MIGRATION = read("supabase/migrations/20260825140000_customizable_role_permissions.sql");
+const FOUR_STATUSES = read("supabase/migrations/20260905090000_four_feedback_statuses.sql");
 
-describe("assigning moves an item off New", () => {
-  it("is enforced by a trigger, not by one screen", () => {
-    expect(MIGRATION).toMatch(/BEFORE UPDATE OF assigned_to ON public\.feedback_items/);
-    expect(MIGRATION).toContain("NEW.status := 'assigned';");
+describe("assignment is a fact, not a status", () => {
+  /**
+   * `20260825180000` flipped an item to `assigned` whenever somebody was put on
+   * it. That recorded one fact twice, and the copies could disagree: clearing
+   * the assignee left the status still saying `assigned`. The status was
+   * retired; `assigned_to` is the whole story now.
+   */
+  it("no longer has a trigger that rewrites the status", () => {
+    expect(FOUR_STATUSES).toMatch(/DROP TRIGGER IF EXISTS feedback_items_advance_status/);
+    expect(FOUR_STATUSES).toMatch(/DROP FUNCTION IF EXISTS public\.advance_status_on_assign/);
   });
 
-  it("only promotes from statuses that mean nobody has picked it up", () => {
-    const guard = MIGRATION.match(/OLD\.status IN \(([^)]*)\)/)?.[1] ?? "";
-    const from = [...guard.matchAll(/'(\w+)'/g)].map((m) => m[1]);
-
-    expect(from.length).toBeGreaterThan(0);
-    for (const status of from) expect(FEEDBACK_STATUSES).toContain(status);
-    // Promoting out of in_progress or ready_for_qa would undo real work.
-    expect(from).not.toContain("in_progress");
-    expect(from).not.toContain("ready_for_qa");
-    expect(from).not.toContain("resolved");
-    expect(from).not.toContain("closed");
+  it("drops the trigger before remapping, so it cannot write the value back", () => {
+    // Any UPDATE touching assigned_to would re-apply `assigned` to a row the
+    // remap had just moved off it.
+    expect(FOUR_STATUSES.indexOf("DROP TRIGGER IF EXISTS feedback_items_advance_status"))
+      .toBeLessThan(FOUR_STATUSES.indexOf("SET status = 'new'"));
   });
 
-  it("lets an explicit status in the same update win", () => {
-    expect(MIGRATION).toMatch(/NEW\.status IS NOT DISTINCT FROM OLD\.status/);
+  it("keeps assignment out of the status vocabulary entirely", () => {
+    expect(FEEDBACK_STATUSES).not.toContain("assigned");
+    expect(ACTIVE_STATUSES).not.toContain("assigned");
   });
 
-  it("targets a status the inbox still counts as active", () => {
-    // Otherwise assigning something would hide it from the default view.
-    expect(ACTIVE_STATUSES).toContain("assigned");
+  it("derives Assigned / Unassigned from assigned_to alone", () => {
+    expect(assignmentLabel("some-user-id")).toBe("Assigned");
+    expect(assignmentLabel(null)).toBe("Unassigned");
+    expect(assignmentLabel(undefined)).toBe("Unassigned");
+    expect(isAssigned("u")).toBe(true);
+    expect(isAssigned(null)).toBe(false);
   });
 
-  it("backfills items assigned before the trigger existed", () => {
-    expect(MIGRATION).toMatch(/UPDATE public\.feedback_items\s+SET status = 'assigned'/);
-  });
-
-  it("runs before the permission trigger it shares a table with", () => {
-    // Postgres fires same-timing triggers in name order, and the permission
-    // check has to see the status this leaves behind.
-    const mine = MIGRATION.match(/CREATE TRIGGER (\w+)\s+BEFORE UPDATE OF assigned_to/)?.[1];
-    const theirs = PERMISSIONS_MIGRATION.match(/CREATE TRIGGER (feedback_items_\w+)/)?.[1];
-    expect(mine).toBeTruthy();
-    expect(theirs).toBeTruthy();
-    expect(mine!.localeCompare(theirs!)).toBeLessThan(0);
+  it("still notifies the assignee — only the status rewrite was removed", () => {
+    expect(MIGRATION).toMatch(/CREATE TRIGGER feedback_items_notify_assignee/);
+    expect(FOUR_STATUSES).not.toMatch(/DROP TRIGGER IF EXISTS feedback_items_notify_assignee/);
+    expect(FOUR_STATUSES).not.toMatch(/DROP FUNCTION IF EXISTS public\.notify_feedback_assignee/);
   });
 });
 

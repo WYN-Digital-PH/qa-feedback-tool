@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { ROLES, ROLE_SUMMARY, type Role } from "@/lib/permissions";
 import { humanize } from "@/lib/feedbackMeta";
+import { profileName } from "@/lib/displayName";
 
 interface Member {
   id: string;
@@ -116,7 +117,7 @@ export default function TeamMembers() {
         <div key={m.id} className="flex items-center justify-between gap-4 border-b border-border pb-3 last:border-0">
           <div className="min-w-0">
             <div className="text-sm font-medium truncate">
-              {m.full_name || m.email}
+              {profileName(m)}
               {m.id === user?.id && <span className="text-muted-foreground font-normal"> (you)</span>}
             </div>
             <div className="text-xs text-muted-foreground truncate">{m.email}</div>

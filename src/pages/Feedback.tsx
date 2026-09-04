@@ -20,6 +20,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import ActivityTimeline from "@/components/feedback/ActivityTimeline";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
+import { commentAuthor, feedbackAuthor, makeNameResolver, profileName } from "@/lib/displayName";
 import {
   ACTIVE_STATUSES,
   FEEDBACK_PRIORITIES as PRIORITIES,
@@ -104,20 +105,24 @@ export default function Feedback() {
     setProfiles(data ?? []);
   }
 
+  /** The page's single source of display names. */
+  const resolveName = useMemo(() => makeNameResolver(profiles), [profiles]);
+
   function assigneeName(id?: string | null): string | null {
     if (!id) return null;
     const p = profiles.find((x) => x.id === id);
-    return p?.full_name || p?.email || "Unknown member";
+    return profileName(p) ?? "Unknown member";
   }
 
   async function loadLatestReplies(itemIds: string[]) {
     if (itemIds.length === 0) { setLatestReplyMap({}); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("feedback_comments")
-      .select("feedback_item_id, body, created_at, is_internal, guest_name, profiles(full_name, email)")
+      .select("feedback_item_id, body, created_at, is_internal, guest_name, user_id, profiles(full_name, email)")
       .in("feedback_item_id", itemIds)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
+    if (error) console.error("[Feedback] could not load reply previews", error);
     const m: Record<string, any> = {};
     (data ?? []).forEach((r: any) => {
       if (m[r.feedback_item_id]) return;
@@ -125,7 +130,7 @@ export default function Feedback() {
         body: r.body,
         created_at: r.created_at,
         is_internal: r.is_internal,
-        author: r.profiles?.full_name ?? r.profiles?.email ?? r.guest_name ?? "Team",
+        author: commentAuthor(r, resolveName),
       };
     });
     setLatestReplyMap(m);
@@ -199,7 +204,12 @@ export default function Feedback() {
   async function loadComments(itemId: string) {
     let q = supabase.from("feedback_comments").select("*, profiles(full_name, email)").eq("feedback_item_id", itemId).order("created_at");
     if (!showDeleted) q = q.is("deleted_at", null);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      // Silently empty threads are indistinguishable from broken ones.
+      console.error("[Feedback] could not load thread", error);
+      toast.error("Could not load this thread.");
+    }
     setComments(data ?? []);
   }
 
@@ -248,7 +258,6 @@ export default function Feedback() {
     if (!selected) return;
     const patch: any = { [field]: value };
     if (field === "status" && value === "resolved") patch.resolved_at = new Date().toISOString();
-    if (field === "status" && value === "closed") patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from("feedback_items").update(patch).eq("id", selected.id);
     if (error) { toast.error(error.message); return; }
     setSelected({ ...selected, ...patch });
@@ -340,7 +349,6 @@ export default function Feedback() {
     const ids = Array.from(selectedIds);
     const patch: any = { status: newStatus };
     if (newStatus === "resolved") patch.resolved_at = new Date().toISOString();
-    if (newStatus === "closed") patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from("feedback_items").update(patch).in("id", ids);
     if (error) { toast.error(error.message); return; }
     const { data: { user } } = await supabase.auth.getUser();
@@ -407,7 +415,6 @@ export default function Feedback() {
     if (!it) return;
     const patch: any = { status: newStatus };
     if (newStatus === "resolved") patch.resolved_at = new Date().toISOString();
-    if (newStatus === "closed") patch.closed_at = new Date().toISOString();
     setItems((prev) => prev.map((p) => (p.id === itemId ? { ...p, ...patch } : p)));
     const { error } = await supabase.from("feedback_items").update(patch).eq("id", itemId);
     if (error) { toast.error(error.message); load(); return; }
@@ -488,7 +495,7 @@ export default function Feedback() {
             <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
             {profiles
               .filter((p) => p.id !== user?.id)
-              .map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>)}
+              .map((p) => <SelectItem key={p.id} value={p.id}>{profileName(p)}</SelectItem>)}
           </SelectContent>
         </Select>
         <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
@@ -518,7 +525,7 @@ export default function Feedback() {
               <SelectTrigger className="w-44 h-8"><SelectValue placeholder="Assign to…" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>)}
+                {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{profileName(p)}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -548,6 +555,7 @@ export default function Feedback() {
           feedbackLabelMap={feedbackLabelMap}
           labels={labels}
           assigneeName={assigneeName}
+          authorName={(it) => feedbackAuthor(it, resolveName)}
         />
       ) : (
         <div className="surface-card overflow-hidden">
@@ -592,7 +600,7 @@ export default function Feedback() {
                         <div className={`line-clamp-2 max-w-md ${it.deleted_at ? "italic text-muted-foreground line-through" : ""}`}>{it.comment}</div>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-md">
-                        {(it.created_by_type === "team" ? "Team" : (it.guest_name ?? "Guest"))}
+                        {feedbackAuthor(it, resolveName)}
                         {it.pdf_page_number ? ` · p.${it.pdf_page_number}` : ""}
                         {it.original_page_url ? ` · ${(() => { try { return new URL(it.original_page_url).pathname; } catch { return it.original_page_url; } })()}` : ""}
                       </div>
@@ -747,7 +755,7 @@ export default function Feedback() {
                       <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
                       {profiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.full_name || p.email}{p.id === user?.id ? " (you)" : ""}
+                          {profileName(p)}{p.id === user?.id ? " (you)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -759,7 +767,7 @@ export default function Feedback() {
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground space-y-0.5">
-                  <div>From: {selected.guest_name ?? "Guest"}{selected.guest_email ? ` <${selected.guest_email}>` : ""}</div>
+                  <div>From: {feedbackAuthor(selected, resolveName)}{selected.guest_email ? ` <${selected.guest_email}>` : ""}</div>
                   {selected.original_page_url && (
                     <div className="flex items-center gap-1">
                       Source: <a href={selected.original_page_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{selected.original_page_url}</a> <ExternalLink className="w-3.5 h-3.5" />
@@ -788,7 +796,7 @@ export default function Feedback() {
                               <Badge variant={c.is_internal ? "outline" : "default"} className="text-[10px]">
                                 {c.is_internal ? "Internal note" : "Public reply"}
                               </Badge>
-                              <span>{(c.profiles as any)?.full_name ?? c.guest_name ?? "Team"}</span>
+                              <span>{commentAuthor(c as any, resolveName)}</span>
                               <span>· {new Date(c.created_at).toLocaleString()}</span>
                             </div>
                             <div className="whitespace-pre-wrap">{c.body}</div>

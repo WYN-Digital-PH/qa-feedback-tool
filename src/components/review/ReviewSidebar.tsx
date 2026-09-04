@@ -6,11 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Search, Send, Lock, MessageSquare, ImageOff, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Search, Send, Lock, MessageSquare, ImageOff, Loader2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { humanize } from "@/lib/feedbackMeta";
+import { profileName } from "@/lib/displayName";
 
 export interface SidebarItem {
   id: string;
@@ -29,6 +30,18 @@ export interface SidebarItem {
   screenshot_url?: string | null;
   screenshot_status?: "pending" | "processing" | "completed" | "failed" | string | null;
   visibility?: "public" | "internal" | string | null;
+  /**
+   * Replies under this item, for the list indicator. Counted by the caller,
+   * which is the only side that knows which replies the viewer may see — a
+   * guest must not be told that internal notes exist.
+   */
+  reply_count?: number | null;
+  /**
+   * Who wrote it, already resolved by the caller — the only side that holds the
+   * profiles list. Falls back to `guest_name` when absent, which is right for
+   * the public canvas where every author is a guest.
+   */
+  author_name?: string | null;
   mine?: boolean;
   deleted?: boolean;
   deleted_by_type?: string | null;
@@ -80,7 +93,16 @@ export interface ReviewSidebarProps {
   mode: "public" | "internal";
   // list
   items: SidebarItem[];
+  /**
+   * How many items are in scope for this view before the user's own filters —
+   * the denominator of the `n/N` badge. Callers must pass the count after the
+   * structural rules (deleted, current page) and before status/priority/
+   * assignee/label/search, or the badge stops meaning "your filters hide this
+   * many" and starts looking like missing data.
+   */
   totalCount: number;
+  /** Clears every filter this sidebar owns. Enables the "n hidden" reset. */
+  onClearFilters?: () => void;
   search: string;
   setSearch: (v: string) => void;
   filterValue: string;
@@ -107,7 +129,7 @@ export interface ReviewSidebarProps {
 }
 
 export default function ReviewSidebar(props: ReviewSidebarProps) {
-  const { mode, items, totalCount, search, setSearch, filterValue, setFilterValue, filterOptions,
+  const { mode, items, totalCount, onClearFilters, search, setSearch, filterValue, setFilterValue, filterOptions,
     selectedId, selectedItem, replies, onSelect, onBack,
     canReply, replyText, setReplyText, onSubmitReply, internal, guestActions, extraFilters, emptyText } = props;
   const [screenshotOpen, setScreenshotOpen] = useState(false);
@@ -141,6 +163,26 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
     return Array.from(map.values());
   }, [items]);
 
+  /**
+   * Where the open thread sits in the list, and what its neighbours are.
+   *
+   * Derived from `items` rather than asked of the caller, so the arrows always
+   * walk exactly what is on screen — same filter, same order — and cannot drift
+   * out of step with it. Null while nothing is open, or when the open item is
+   * not in the current list (it can be filtered out while still selected).
+   */
+  const threadPosition = useMemo(() => {
+    if (!selectedId) return null;
+    const i = items.findIndex((it) => it.id === selectedId);
+    if (i === -1) return null;
+    return {
+      index: i + 1,
+      total: items.length,
+      prevId: i > 0 ? items[i - 1].id : null,
+      nextId: i < items.length - 1 ? items[i + 1].id : null,
+    };
+  }, [items, selectedId]);
+
   // Stable pin numbers come from feedback_items.pin_number (DB-assigned, unique per canvas).
   // Fallback to created_at index only if pin_number is missing for legacy rows.
   function pinLabel(it: SidebarItem, fallbackIdx: number): number | string {
@@ -166,6 +208,38 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
           <Button size="sm" variant="ghost" onClick={onBack} className="h-7 px-2 -ml-1">
             <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
           </Button>
+          {/*
+            Walking a review meant thread → Back → next thread, every time.
+            Stepping straight to the neighbour keeps the canvas in one place and
+            the reviewer in one rhythm. The order is the list's own, so it
+            follows whatever filter and grouping is on screen; an item that the
+            current filter excludes has no neighbours and both arrows disable.
+          */}
+          {threadPosition && (
+            <div className="flex items-center gap-0.5">
+              <Button
+                size="sm" variant="ghost" className="h-7 w-7 p-0"
+                disabled={!threadPosition.prevId}
+                onClick={() => threadPosition.prevId && onSelect(threadPosition.prevId)}
+                aria-label="Previous comment"
+                title="Previous comment"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </Button>
+              <span className="text-[10px] text-muted-foreground tabular-nums px-0.5">
+                {threadPosition.index}/{threadPosition.total}
+              </span>
+              <Button
+                size="sm" variant="ghost" className="h-7 w-7 p-0"
+                disabled={!threadPosition.nextId}
+                onClick={() => threadPosition.nextId && onSelect(threadPosition.nextId)}
+                aria-label="Next comment"
+                title="Next comment"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 ml-auto">
             <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
               {pinNumber}
@@ -185,7 +259,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
               <div className={`p-2.5 rounded-md text-sm border ${selectedItem.visibility === "internal" ? "border-warning/40 bg-warning/5" : "border-primary/30 bg-primary/5"}`}>
                 <div className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1 flex-wrap">
                   {selectedItem.visibility === "internal" && <Lock className="w-3.5 h-3.5 text-warning" />}
-                  <span className="font-medium text-foreground">{selectedItem.guest_name ?? "Guest"}</span>
+                  <span className="font-medium text-foreground">{selectedItem.author_name ?? selectedItem.guest_name ?? "Guest"}</span>
                   {mode === "internal" && selectedItem.guest_email && (
                     <span className="text-muted-foreground">· {selectedItem.guest_email}</span>
                   )}
@@ -445,7 +519,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {internal.profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>)}
+                    {internal.profiles.map((p) => <SelectItem key={p.id} value={p.id}>{profileName(p)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -539,6 +613,21 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
           </SelectContent>
         </Select>
         {extraFilters}
+        {/*
+          Filters are sticky and easy to forget, and a hidden item is
+          indistinguishable from one that was never saved. Saying how many are
+          hidden, and offering one click to see them, is what turns "the
+          feedback is gone" back into "the filter is on".
+        */}
+        {onClearFilters && items.length < totalCount && (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="w-full text-left text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+          >
+            {totalCount - items.length} hidden by filters — show all
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto">
         {items.length === 0 ? (
@@ -568,7 +657,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
                                 {isInternal && <Lock className="w-2.5 h-2.5 text-warning" />}
-                                {c.guest_name ?? "Guest"}
+                                {c.author_name ?? c.guest_name ?? "Guest"}
                               </div>
                               <div className="text-[10px] text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</div>
                             </div>
@@ -583,6 +672,15 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                               )}
                               {c.device_type && (
                                 <span className="text-[10px] text-muted-foreground capitalize">{c.device_type}</span>
+                              )}
+                              {!!c.reply_count && (
+                                <span
+                                  className="text-[10px] text-muted-foreground flex items-center gap-0.5"
+                                  title={`${c.reply_count} ${c.reply_count === 1 ? "reply" : "replies"}`}
+                                >
+                                  <MessageSquare className="w-2.5 h-2.5" />
+                                  {c.reply_count}
+                                </span>
                               )}
                             </div>
                           </div>

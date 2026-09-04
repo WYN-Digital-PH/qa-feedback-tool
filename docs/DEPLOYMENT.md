@@ -24,6 +24,14 @@ The recent ones change live behaviour and deserve a staging run first:
 | `20260825160000_record_lifecycle.sql` | Re-points `client_id` foreign keys to `ON DELETE CASCADE`, adds the missing `feedback_labels` foreign keys, constrains `projects.status`. |
 | `20260825170000_owner_safety.sql` | Adds the trigger that refuses to remove the last owner. |
 | `20260825180000_assignment_notifications.sql` | Adds the `notifications` table, notifies an assignee, and moves a newly assigned item off **New**. Backfills existing assigned-but-`new` items. |
+| `20260905090000_four_feedback_statuses.sql` | **Rewrites the `feedback_status` enum from eight values to four.** Remaps `in_review`/`assigned`/`changes_needed` to `new` and `closed` to `resolved`, drops the trigger that turned assignment into a status, and recreates the sign-off permission gate. |
+
+> **blocker** — `20260905090000` swaps the column onto a new enum type and
+> drops the old one. It is not reversible by re-running an earlier migration:
+> once `in_review`, `assigned`, `changes_needed` and `closed` are gone, the
+> rows that held them cannot be told apart from rows that were always `new`.
+> Take a backup, and run it on staging first — the remap is the point, but it
+> is a one-way door.
 
 > **blocker** — `20260825160000` deletes orphaned `feedback_labels` rows before
 > it can add the foreign keys. That is the point (they reference records that no

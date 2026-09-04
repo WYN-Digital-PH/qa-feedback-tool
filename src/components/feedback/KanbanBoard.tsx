@@ -10,16 +10,13 @@ import {
 } from "@/lib/feedbackMeta";
 import { cn } from "@/lib/utils";
 
-// `assigned` earns a column of its own now that assigning an item sets that
-// status automatically — without one, every newly assigned item was folded
-// into In progress and looked like work someone had already started.
+// The board's columns are the status vocabulary, in workflow order. Assignment
+// is deliberately absent: it is `assigned_to`, shown on the card, not a column
+// an item can be dragged into.
 export const KANBAN_COLUMNS = [
   { key: "new", label: "New" },
-  { key: "in_review", label: "In review" },
-  { key: "assigned", label: "Assigned" },
   { key: "in_progress", label: "In progress" },
   { key: "ready_for_qa", label: "Ready for QA" },
-  { key: "changes_needed", label: "Changes needed" },
   { key: "resolved", label: "Resolved" },
 ] as const;
 
@@ -31,13 +28,16 @@ interface KanbanBoardProps {
   labels: { id: string; name: string; color: string }[];
   /** Resolves `assigned_to` to a display name; the column shows it on the card. */
   assigneeName?: (userId?: string | null) => string | null;
+  /** Resolves the card's author. Without it the card falls back to `guest_name`. */
+  authorName?: (item: any) => string | null;
 }
 
-function Card({ item, onClick, labelChips, assigneeName }: {
+function Card({ item, onClick, labelChips, assigneeName, authorName }: {
   item: any;
   onClick: () => void;
   labelChips: { id: string; name: string; color: string }[];
   assigneeName?: string | null;
+  authorName?: string | null;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
   return (
@@ -63,7 +63,7 @@ function Card({ item, onClick, labelChips, assigneeName }: {
         <div className="text-sm line-clamp-3 flex-1 min-w-0">{item.comment}</div>
       </div>
       <div className="text-[11px] text-muted-foreground mt-2 flex items-center justify-between gap-2">
-        <span className="truncate">{item.guest_name ?? "Guest"}</span>
+        <span className="truncate">{authorName ?? item.guest_name ?? "Guest"}</span>
         {assigneeName ? (
           <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium truncate max-w-[90px]">
             {assigneeName}
@@ -114,7 +114,7 @@ function Column({ columnKey, label, items, renderCard }: { columnKey: string; la
   );
 }
 
-export default function KanbanBoard({ items, onStatusChange, onCardClick, feedbackLabelMap, labels, assigneeName }: KanbanBoardProps) {
+export default function KanbanBoard({ items, onStatusChange, onCardClick, feedbackLabelMap, labels, assigneeName, authorName }: KanbanBoardProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -122,6 +122,8 @@ export default function KanbanBoard({ items, onStatusChange, onCardClick, feedba
     const g: Record<string, any[]> = {};
     KANBAN_COLUMNS.forEach((c) => { g[c.key] = []; });
     items.forEach((it) => {
+      // A status with no column can only be a value retired by a migration that
+      // has not run yet. Fall back rather than dropping the card off the board.
       const key = g[it.status] ? it.status : (it.status === "closed" ? "resolved" : "new");
       (g[key] ??= []).push(it);
     });
@@ -159,6 +161,7 @@ export default function KanbanBoard({ items, onStatusChange, onCardClick, feedba
                 onClick={() => onCardClick(it)}
                 labelChips={labelChipsFor(it.id)}
                 assigneeName={assigneeName?.(it.assigned_to)}
+                authorName={authorName?.(it)}
               />
             )}
           />

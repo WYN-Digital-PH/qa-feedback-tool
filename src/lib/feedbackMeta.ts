@@ -9,26 +9,19 @@
 
 export const FEEDBACK_STATUSES = [
   "new",
-  "in_review",
-  "assigned",
   "in_progress",
   "ready_for_qa",
-  "changes_needed",
   "resolved",
-  "closed",
 ] as const;
 
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 
-/** Statuses that still need someone to act on them. */
-export const ACTIVE_STATUSES: readonly string[] = [
-  "new",
-  "in_review",
-  "assigned",
-  "in_progress",
-  "ready_for_qa",
-  "changes_needed",
-];
+/**
+ * Statuses that still need someone to act on them.
+ *
+ * Everything except the sign-off, which is the only terminal state.
+ */
+export const ACTIVE_STATUSES: readonly string[] = ["new", "in_progress", "ready_for_qa"];
 
 /**
  * Statuses that close a feedback item out. Setting one is gated behind the
@@ -36,7 +29,26 @@ export const ACTIVE_STATUSES: readonly string[] = [
  * but only QA or a lead signs it off. Kept in step with the database trigger
  * `enforce_feedback_update_permissions()`.
  */
-export const SIGN_OFF_STATUSES: readonly string[] = ["resolved", "closed"];
+export const SIGN_OFF_STATUSES: readonly string[] = ["resolved"];
+
+/**
+ * Whether an item is assigned.
+ *
+ * Assignment is *not* a status. It used to be — a trigger flipped an item to
+ * `assigned` as soon as somebody was put on it — which meant one fact was
+ * recorded twice and the two copies could disagree: clearing the assignee left
+ * the status saying `assigned`. `assigned_to` is the only record of it now, and
+ * every "Assigned / Unassigned" the user sees is computed here at the moment of
+ * display. Nothing writes it, and nothing can set it by hand.
+ */
+export function isAssigned(assignedTo?: string | null): boolean {
+  return !!assignedTo;
+}
+
+/** "Assigned" or "Unassigned", derived from `assigned_to`. */
+export function assignmentLabel(assignedTo?: string | null): string {
+  return isAssigned(assignedTo) ? "Assigned" : "Unassigned";
+}
 
 export const FEEDBACK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 
@@ -44,13 +56,9 @@ export type FeedbackPriority = (typeof FEEDBACK_PRIORITIES)[number];
 
 const STATUS_LABELS: Record<string, string> = {
   new: "New",
-  in_review: "In review",
-  assigned: "Assigned",
   in_progress: "In progress",
   ready_for_qa: "Ready for QA",
-  changes_needed: "Changes needed",
   resolved: "Resolved",
-  closed: "Closed",
 };
 
 /** Human label for a status or priority value ("in_progress" → "In progress"). */
@@ -79,14 +87,9 @@ export function statusTone(status?: string | null): Tone {
     case "new":
       return "warning";
     case "resolved":
-    case "closed":
       return "success";
-    case "changes_needed":
-      return "danger";
-    case "in_review":
     case "in_progress":
     case "ready_for_qa":
-    case "assigned":
       return "info";
     default:
       return "neutral";
@@ -108,37 +111,25 @@ export function statusTone(status?: string | null): Tone {
 /** Soft background + matching text, for badges and chips. */
 const STATUS_BADGE: Record<string, string> = {
   new: "bg-status-new/15 text-status-new",
-  in_review: "bg-status-in-review/15 text-status-in-review",
-  assigned: "bg-status-assigned/15 text-status-assigned",
   in_progress: "bg-status-in-progress/15 text-status-in-progress",
   ready_for_qa: "bg-status-ready-for-qa/15 text-status-ready-for-qa",
-  changes_needed: "bg-status-changes-needed/15 text-status-changes-needed",
   resolved: "bg-status-resolved/15 text-status-resolved",
-  closed: "bg-status-closed/15 text-status-closed",
 };
 
 /** Solid fill, for the rule above a board column and for dots. */
 const STATUS_SOLID: Record<string, string> = {
   new: "bg-status-new",
-  in_review: "bg-status-in-review",
-  assigned: "bg-status-assigned",
   in_progress: "bg-status-in-progress",
   ready_for_qa: "bg-status-ready-for-qa",
-  changes_needed: "bg-status-changes-needed",
   resolved: "bg-status-resolved",
-  closed: "bg-status-closed",
 };
 
 /** Left edge on a board card, tinted to the column it sits in. */
 const STATUS_EDGE: Record<string, string> = {
   new: "border-l-status-new",
-  in_review: "border-l-status-in-review",
-  assigned: "border-l-status-assigned",
   in_progress: "border-l-status-in-progress",
   ready_for_qa: "border-l-status-ready-for-qa",
-  changes_needed: "border-l-status-changes-needed",
   resolved: "border-l-status-resolved",
-  closed: "border-l-status-closed",
 };
 
 export function statusBadgeClass(status?: string | null): string {

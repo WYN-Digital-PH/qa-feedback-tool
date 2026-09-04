@@ -85,13 +85,9 @@
        waiting), which should stay legible whatever accent an agency picks.
        Ordered as work moves: waiting -> being looked at -> owned -> done. */
     --status-new: 38 92% 50%;
-    --status-in-review: 199 89% 48%;
-    --status-assigned: 262 83% 58%;
     --status-in-progress: 217 91% 60%;
     --status-ready-for-qa: 173 80% 36%;
-    --status-changes-needed: 0 75% 55%;
     --status-resolved: 142 65% 38%;
-    --status-closed: 220 9% 46%;
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
@@ -160,13 +156,9 @@
 
     /* Lifted so they hold contrast on the dark canvas. */
     --status-new: 38 92% 58%;
-    --status-in-review: 199 89% 58%;
-    --status-assigned: 262 83% 68%;
     --status-in-progress: 217 91% 68%;
     --status-ready-for-qa: 173 70% 46%;
-    --status-changes-needed: 0 75% 63%;
     --status-resolved: 142 60% 48%;
-    --status-closed: 220 9% 62%;
 
     --border: 222 20% 22%;
     --input: 222 20% 22%;

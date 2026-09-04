@@ -86,7 +86,7 @@ describe("feedback vocabulary", () => {
   it("maps statuses to theme tokens rather than palette colours", () => {
     render(<StatusBadge status="resolved" />);
     expect(screen.getByText("Resolved").className).toContain("bg-status-resolved/15");
-    expect(statusTone("changes_needed")).toBe("danger");
+    expect(statusTone("ready_for_qa")).toBe("info");
 
     // Everything resolves to semantic tokens, never a Tailwind palette colour —
     // a palette colour would survive a rebrand unchanged.

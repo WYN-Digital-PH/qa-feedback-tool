@@ -19,6 +19,10 @@ const MIGRATION = readFileSync(
   "utf8",
 ).replace(/\r\n/g, "\n");
 const DOC = readFileSync(path.join(ROOT, "docs/ROLES_AND_PERMISSIONS.md"), "utf8").replace(/\r\n/g, "\n");
+const FOUR_STATUSES = readFileSync(
+  path.join(ROOT, "supabase/migrations/20260905090000_four_feedback_statuses.sql"),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 /** Permission keys seeded into the `permissions` catalogue table. */
 function catalogueKeys(): string[] {
@@ -133,7 +137,13 @@ describe("enforcement", () => {
     for (const status of SIGN_OFF_STATUSES) {
       expect(MIGRATION).toContain(`'${status}'`);
     }
-    expect(MIGRATION).toMatch(/NEW\.status IN \('resolved', 'closed'\)/);
+    // `closed` was retired by 20260905090000, which recreated the gate naming
+    // the one sign-off status that survives.
+    expect(FOUR_STATUSES).toMatch(/NEW\.status = 'resolved'/);
+    // The migration still names 'closed' where it maps the old rows across;
+    // what must not survive is a permission gate that expects to see it.
+    const gate = FOUR_STATUSES.slice(FOUR_STATUSES.indexOf("enforce_feedback_update_permissions"));
+    expect(gate).not.toMatch(/'closed'/);
   });
 
   it("keeps owner permissions immutable and owner-granting owner-only", () => {

@@ -19,6 +19,8 @@ import ReviewSidebar from "@/components/review/ReviewSidebar";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { samePageUrl } from "@/lib/pageUrl";
+import { FEEDBACK_STATUSES, humanize } from "@/lib/feedbackMeta";
+import { commentAuthor, feedbackAuthor, makeNameResolver, profileName } from "@/lib/displayName";
 import { useAuth } from "@/contexts/AuthContext";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
 
@@ -29,8 +31,9 @@ const PROXY_URL = `${SUPA_URL}/functions/v1/proxy-website`;
 type Mode = "browse" | "comment";
 type Device = "desktop" | "tablet" | "mobile";
 const DEVICE_WIDTHS: Record<Device, number | null> = { desktop: null, tablet: 820, mobile: 390 };
-const STATUSES = ["new","in_progress","ready_for_qa","resolved"];
-const STATUS_LABELS: Record<string,string> = { new: "Active", in_progress: "In progress", ready_for_qa: "Ready for QA", resolved: "Resolved" };
+// The vocabulary lives in one place. This page having its own copy is how the
+// canvas came to offer four statuses while the inbox offered eight.
+const STATUSES = [...FEEDBACK_STATUSES];
 const PRIORITIES = ["low","normal","high","urgent"];
 
 export default function InternalCanvas() {
@@ -47,6 +50,8 @@ export default function InternalCanvas() {
   const [feedback, setFeedback] = useState<any[]>([]);
   const [labels, setLabels] = useState<any[]>([]);
   const [feedbackLabelMap, setFeedbackLabelMap] = useState<Record<string, string[]>>({});
+  /** Replies per feedback item, for the list indicator. Counted, not fetched in full. */
+  const [replyCountMap, setReplyCountMap] = useState<Record<string, number>>({});
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +70,10 @@ export default function InternalCanvas() {
   const [fPriority, setFPriority] = useState("all");
   const [fAssignee, setFAssignee] = useState("all");
   const [fLabel, setFLabel] = useState("all");
-  const [currentPageOnly, setCurrentPageOnly] = useState(true);
+  // Defaults to the whole canvas. Scoping to the current page by default hid
+  // most of a multi-page review behind a checkbox nobody had ticked, which
+  // reads as missing feedback rather than as a filter.
+  const [currentPageOnly, setCurrentPageOnly] = useState(false);
 
   const [pdfPage, setPdfPage] = useState(1);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -132,6 +140,19 @@ export default function InternalCanvas() {
       const m: Record<string, string[]> = {};
       (fl ?? []).forEach((r: any) => { (m[r.feedback_item_id] = m[r.feedback_item_id] ?? []).push(r.label_id); });
       setFeedbackLabelMap(m);
+
+      // Only the ids are pulled, not the bodies: the list needs a number, and
+      // the thread already fetches the replies themselves when it opens.
+      // Internal notes count here — this canvas is the team's, and it renders
+      // them in the thread too.
+      const { data: rc } = await supabase
+        .from("feedback_comments")
+        .select("feedback_item_id")
+        .in("feedback_item_id", items.map((i: any) => i.id))
+        .is("deleted_at", null);
+      const counts: Record<string, number> = {};
+      (rc ?? []).forEach((r: any) => { counts[r.feedback_item_id] = (counts[r.feedback_item_id] ?? 0) + 1; });
+      setReplyCountMap(counts);
     }
     setLoading(false);
   }
@@ -220,6 +241,30 @@ export default function InternalCanvas() {
     })();
     return () => ctrl.abort();
   }, [canvas?.share_token, canvas?.type, currentUrl]);
+
+  /**
+   * The denominator for the sidebar's `n/N`.
+   *
+   * This used to be `feedback.length` — every row on the canvas, across every
+   * page, including resolved and soft-deleted ones. Against a list that is
+   * scoped to the current page and defaults to hiding resolved, that produced
+   * readings like "5/17" on a perfectly healthy canvas, which is
+   * indistinguishable from feedback having gone missing.
+   *
+   * Counting the same structural scope the list uses — deletion state and page
+   * — leaves the ratio measuring one thing: how much the user's own filters
+   * are hiding.
+   */
+  const inScopeCount = useMemo(() => {
+    let list = feedback;
+    if (!showDeleted) list = list.filter((f) => !f.deleted_at);
+    if (currentPageOnly && canvas?.type === "website") list = list.filter((f) => !f.original_page_url || samePageUrl(f.original_page_url, currentUrl));
+    if (currentPageOnly && canvas?.type === "pdf") list = list.filter((f) => (f.pdf_page_number ?? 1) === pdfPage);
+    return list.length;
+  }, [feedback, showDeleted, currentPageOnly, canvas?.type, currentUrl, pdfPage]);
+
+  /** The page's single source of display names. */
+  const resolveName = useMemo(() => makeNameResolver(profiles), [profiles]);
 
   const filtered = useMemo(() => {
     let list = feedback;
@@ -431,6 +476,7 @@ export default function InternalCanvas() {
       action: replyKind === "internal" ? "internal_note_added" : "public_reply_added",
     });
     setReplyText("");
+    setReplyCountMap((m) => ({ ...m, [selectedId]: (m[selectedId] ?? 0) + 1 }));
     if (selectedId) reloadComments(selectedId);
   }
 
@@ -644,8 +690,9 @@ export default function InternalCanvas() {
         <aside className="w-96 border-r border-border bg-card flex flex-col shrink-0">
           <ReviewSidebar
             mode="internal"
-            items={filtered.map((f: any) => ({ ...f, deleted: !!f.deleted_at, deleted_by_type: f.deleted_by_type ?? null })) as any}
-            totalCount={feedback.length}
+            items={filtered.map((f: any) => ({ ...f, deleted: !!f.deleted_at, deleted_by_type: f.deleted_by_type ?? null, reply_count: replyCountMap[f.id] ?? 0, author_name: feedbackAuthor(f, resolveName) })) as any}
+            totalCount={inScopeCount}
+            onClearFilters={() => { setFStatus("all"); setFPriority("all"); setFAssignee("all"); setFLabel("all"); setSearch(""); }}
             search={search}
             setSearch={setSearch}
             filterValue={fStatus}
@@ -653,17 +700,17 @@ export default function InternalCanvas() {
             filterOptions={[
               { value: "open", label: "Open (hide resolved)" },
               { value: "all", label: "All status" },
-              ...STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s })),
+              ...STATUSES.map((s) => ({ value: s, label: humanize(s) })),
             ]}
             emptyText="No comments match."
             selectedId={selectedId}
-            selectedItem={selected ? ({ ...selected, deleted: !!(selected as any).deleted_at, deleted_by_type: (selected as any).deleted_by_type ?? null }) as any : null}
+            selectedItem={selected ? ({ ...selected, deleted: !!(selected as any).deleted_at, deleted_by_type: (selected as any).deleted_by_type ?? null, author_name: feedbackAuthor(selected as any, resolveName) }) as any : null}
             replies={comments.filter((c) => showDeleted || !c.deleted_at).map((c) => {
               const prof = c.user_id ? profiles.find((p: any) => p.id === c.user_id) : null;
               return {
                 id: c.id,
                 body: c.body,
-                author: prof?.full_name || prof?.email || c.guest_name || (c.user_id ? "Team" : "Guest"),
+                author: commentAuthor({ ...c, profiles: prof }, resolveName),
                 created_at: c.created_at,
                 is_internal: c.is_internal,
                 from_team: !!c.user_id,
@@ -720,7 +767,7 @@ export default function InternalCanvas() {
                     <SelectContent>
                       <SelectItem value="all">Any assignee</SelectItem>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>)}
+                      {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{profileName(p)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Select value={fLabel} onValueChange={setFLabel}>

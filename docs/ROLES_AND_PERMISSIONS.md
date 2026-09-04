@@ -81,8 +81,8 @@ Twenty permissions, grouped the way they appear in Settings. The key in
 | View feedback | `feedback.view` | Read client feedback, replies and internal notes. Also needed to see labels and approval decisions. |
 | Comment and pin | `feedback.comment` | Reply to feedback, add internal notes, and drop team pins on a canvas. Also allows editing your **own** comments. |
 | Triage feedback | `feedback.triage` | Change status, priority, category and labels on an item. Excludes resolving — see below. |
-| Assign feedback | `feedback.assign` | Assign an item to a team member. The assignee is notified in the app, and an item still sitting on **New** or **In review** moves to **Assigned**. |
-| Resolve and close | `feedback.resolve` | Move an item to **Resolved** or **Closed** — the final sign-off. Also marks a client's round of requested changes as addressed. |
+| Assign feedback | `feedback.assign` | Assign an item to a team member. The assignee is notified in the app. Assignment does not change the status — **Assigned** / **Unassigned** is derived from whether anyone is on the item, and cannot be set by hand. |
+| Resolve | `feedback.resolve` | Move an item to **Resolved** — the final sign-off, and the only terminal status. Also marks a client's round of requested changes as addressed. |
 | Delete feedback | `feedback.delete` | Delete feedback items and replies, and edit **other people's** comments. This is the moderation permission. |
 
 > **Why triage and resolve are separate.** The status flow includes *Ready for
@@ -196,8 +196,8 @@ role instead.
 ### Worked examples
 
 **"Our developers should close their own tickets."**
-Tick `feedback.resolve` for Developer. They can now move items to Resolved and
-Closed without waiting for QA.
+Tick `feedback.resolve` for Developer. They can now move items to Resolved
+without waiting for QA.
 
 **"Consultants keep deleting canvases by accident."**
 They can't by default. If you granted `canvases.delete` earlier, untick it —

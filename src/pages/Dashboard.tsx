@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { FolderKanban, MessageSquare, CheckCircle2, Clock, AlertCircle, Sparkles, type LucideIcon } from "lucide-react";
 import { Page, PageHeader, SectionHeading } from "@/components/layout/Page";
 import { InlineEmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
+import { feedbackAuthor, makeNameResolver, type ProfileLike } from "@/lib/displayName";
 
 interface Stats {
   projects: number;
@@ -30,17 +31,25 @@ function StatCard({ icon: Icon, label, value, accent }: { icon: LucideIcon; labe
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats>({ projects: 0, canvases: 0, newFeedback: 0, inProgress: 0, resolved: 0, approvals: 0 });
   const [recent, setRecent] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<ProfileLike[]>([]);
+  /** Same resolver as every other surface — see src/lib/displayName.ts. */
+  const resolveName = useMemo(() => makeNameResolver(profiles), [profiles]);
 
   useEffect(() => {
     (async () => {
-      const [projects, canvases, fbNew, fbInProg, fbResolved, decisions, recentFb] = await Promise.all([
+      // Feedback is deleted by stamping `deleted_at`, never by removing the row,
+      // so every count and list here has to exclude it explicitly. Without that
+      // a client deleting their own comment left it in the dashboard totals and
+      // in the recent list — visibly undone everywhere except here.
+      const [projects, canvases, fbNew, fbInProg, fbResolved, decisions, profileRows, recentFb] = await Promise.all([
         supabase.from("projects").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("canvases").select("id", { count: "exact", head: true }).eq("status", "active"),
-        supabase.from("feedback_items").select("id", { count: "exact", head: true }).eq("status", "new"),
-        supabase.from("feedback_items").select("id", { count: "exact", head: true }).in("status", ["in_progress", "assigned", "in_review"]),
-        supabase.from("feedback_items").select("id", { count: "exact", head: true }).eq("status", "resolved"),
+        supabase.from("feedback_items").select("id", { count: "exact", head: true }).eq("status", "new").is("deleted_at", null),
+        supabase.from("feedback_items").select("id", { count: "exact", head: true }).in("status", ["in_progress", "ready_for_qa"]).is("deleted_at", null),
+        supabase.from("feedback_items").select("id", { count: "exact", head: true }).eq("status", "resolved").is("deleted_at", null),
         supabase.from("review_decisions").select("id", { count: "exact", head: true }).eq("decision", "approved"),
-        supabase.from("feedback_items").select("id, comment, guest_name, status, priority, created_at, original_page_url, canvases(name), projects(name)").order("created_at", { ascending: false }).limit(8),
+        supabase.from("profiles").select("id, full_name, email"),
+        supabase.from("feedback_items").select("id, comment, guest_name, guest_email, created_by_type, created_by_user_id, status, priority, created_at, original_page_url, canvases(name), projects(name)").is("deleted_at", null).order("created_at", { ascending: false }).limit(8),
       ]);
       setStats({
         projects: projects.count ?? 0,
@@ -50,6 +59,7 @@ export default function Dashboard() {
         resolved: fbResolved.count ?? 0,
         approvals: decisions.count ?? 0,
       });
+      setProfiles((profileRows.data ?? []) as ProfileLike[]);
       setRecent(recentFb.data ?? []);
     })();
   }, []);
@@ -80,7 +90,7 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm line-clamp-2">{f.comment}</div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {f.guest_name ?? "Guest"} · {(f.projects as any)?.name} / {(f.canvases as any)?.name}
+                    {feedbackAuthor(f, resolveName)} · {(f.projects as any)?.name} / {(f.canvases as any)?.name}
                   </div>
                 </div>
                 <StatusBadge status={f.status} />

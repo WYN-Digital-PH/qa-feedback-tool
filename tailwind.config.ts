@@ -45,13 +45,9 @@ export default {
         // runtime, so never compose these as `bg-status-${status}`.
         status: {
           new: "hsl(var(--status-new))",
-          "in-review": "hsl(var(--status-in-review))",
-          assigned: "hsl(var(--status-assigned))",
           "in-progress": "hsl(var(--status-in-progress))",
           "ready-for-qa": "hsl(var(--status-ready-for-qa))",
-          "changes-needed": "hsl(var(--status-changes-needed))",
           resolved: "hsl(var(--status-resolved))",
-          closed: "hsl(var(--status-closed))",
         },
         // Review pin colours, so canvases and badges can use the same tokens
         // that get pushed into the proxied-website overlay.

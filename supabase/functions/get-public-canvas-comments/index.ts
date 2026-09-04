@@ -60,11 +60,32 @@ Deno.serve(async (req) => {
     if (ownOnly) q = q.eq("guest_token", myToken);
 
     const { data: items } = await q;
+
+    // Reply counts for the list indicator.
+    //
+    // `is_internal` is filtered here rather than in the client, because the
+    // count itself is disclosure: telling a reviewer that a pin has three
+    // replies when all three are internal notes reveals that the team has been
+    // talking about it, which is exactly what an internal note is not.
+    const ids = (items ?? []).map((r: any) => r.id);
+    const replyCounts: Record<string, number> = {};
+    if (ids.length) {
+      const { data: replies } = await supabase
+        .from("feedback_comments")
+        .select("feedback_item_id")
+        .in("feedback_item_id", ids)
+        .eq("is_internal", false)
+        .is("deleted_at", null);
+      (replies ?? []).forEach((r: any) => {
+        replyCounts[r.feedback_item_id] = (replyCounts[r.feedback_item_id] ?? 0) + 1;
+      });
+    }
+
     // Strip guest_token, attach `mine` boolean.
     const out = (items ?? []).map((r: any) => {
       const mine = !!myToken && r.guest_token === myToken;
       const { guest_token: _gt, ...rest } = r;
-      return { ...rest, mine };
+      return { ...rest, mine, reply_count: replyCounts[r.id] ?? 0 };
     });
 
     return new Response(JSON.stringify({ comments: out }), {
