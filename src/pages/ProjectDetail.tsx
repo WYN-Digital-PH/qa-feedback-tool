@@ -5,6 +5,7 @@ import type { TablesUpdate } from "@/integrations/supabase/types";
 import { copyToClipboard } from "@/lib/clipboard";
 import { describeWriteError } from "@/lib/errors";
 import { collectCanvasFilePaths, removeStoredFiles } from "@/lib/records";
+import { countByStatus, humanize, statusSolidClass } from "@/lib/feedbackMeta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,6 @@ import {
   MoreHorizontal, Pencil, Archive, ArchiveRestore, Trash2, Settings2, CalendarClock, type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import ApprovalHistory from "@/components/canvas/ApprovalHistory";
 import CanvasSettingsDialog, { type CanvasRecord } from "@/components/canvas/CanvasSettingsDialog";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,6 +44,11 @@ const STATUS_STYLES: Record<string, string> = {
   completed: "bg-primary/10 text-primary",
   archived: "bg-secondary text-muted-foreground",
 };
+
+/** A canvas's feedback, minus the soft-deleted rows nothing else counts either. */
+function liveFeedback(canvas: any): { id: string; status?: string | null; deleted_at?: string | null }[] {
+  return ((canvas?.feedback_items ?? []) as any[]).filter((f) => !f?.deleted_at);
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -75,7 +80,7 @@ export default function ProjectDetail() {
     if (!id) return;
     const [{ data: p }, { data: c }] = await Promise.all([
       supabase.from("projects").select("*, clients(name, company_name)").eq("id", id).maybeSingle(),
-      supabase.from("canvases").select("*, feedback_items(id), canvas_files(public_url, mime_type, file_size, original_filename)").eq("project_id", id).order("created_at", { ascending: false }),
+      supabase.from("canvases").select("*, feedback_items(id, status, deleted_at), canvas_files(public_url, mime_type, file_size, original_filename)").eq("project_id", id).order("created_at", { ascending: false }),
     ]);
     setProject(p);
     setCanvases(c ?? []);
@@ -451,7 +456,7 @@ export default function ProjectDetail() {
                     {/* The settings that change what a guest can actually do,
                         surfaced here so they don't only live behind a dialog. */}
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>{(c.feedback_items ?? []).length} feedback item{(c.feedback_items ?? []).length === 1 ? "" : "s"}</span>
+                      <span>{liveFeedback(c).length} feedback item{liveFeedback(c).length === 1 ? "" : "s"}</span>
                       {!c.commenting_enabled && <span className="text-warning">Commenting closed</span>}
                       {c.feedback_deadline && (
                         <span className={new Date(c.feedback_deadline) < new Date() ? "text-destructive" : ""}>
@@ -465,7 +470,24 @@ export default function ProjectDetail() {
                       {c.type === "website" && !c.proxy_enabled && <span className="text-warning">Proxy off</span>}
                       <span>Added {new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
-                    <ApprovalHistory canvasId={c.id} />
+                    {/* Where the work actually stands, without opening the canvas.
+                        Every status is shown, empty ones included: "0 New" is
+                        information, and a row whose chips move around as counts
+                        change is harder to read at a glance than a fixed one. */}
+                    {liveFeedback(c).length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        {countByStatus(liveFeedback(c)).map(({ status, count }) => (
+                          <span
+                            key={status}
+                            className={`inline-flex items-center gap-1.5 ${count === 0 ? "text-muted-foreground/50" : "text-muted-foreground"}`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${count === 0 ? "bg-muted-foreground/30" : statusSolidClass(status)}`} />
+                            <span className={count > 0 ? "font-medium text-foreground" : ""}>{count}</span>
+                            {humanize(status)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     <Button size="sm" onClick={() => window.open(`/app/canvas/${c.id}`, "_blank")}>
@@ -579,8 +601,8 @@ export default function ProjectDetail() {
           <>
             This permanently removes the canvas, its uploaded file, and{" "}
             <strong>
-              {(deletingCanvas?.feedback_items ?? []).length} piece
-              {(deletingCanvas?.feedback_items ?? []).length === 1 ? "" : "s"} of feedback
+              {liveFeedback(deletingCanvas).length} piece
+              {liveFeedback(deletingCanvas).length === 1 ? "" : "s"} of feedback
             </strong>{" "}
             along with every reply and approval decision. The shared review link stops working immediately. Archive
             instead to close the link but keep the record.

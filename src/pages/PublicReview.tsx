@@ -14,7 +14,6 @@ import PdfReviewCanvas from "@/components/review/PdfReviewCanvas";
 import ReviewSidebar from "@/components/review/ReviewSidebar";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
-import { defaultReviewDecision, type ReviewDecision } from "@/lib/reviewDecision";
 import { readOrCreateGuestToken } from "@/lib/guestToken";
 import { samePageUrl } from "@/lib/pageUrl";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
@@ -24,16 +23,6 @@ const SUPA_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const PROXY_URL = `${SUPA_URL}/functions/v1/proxy-website`;
 
 
-/** The fields the finish-review overview reads back from a reviewer's pins. */
-interface OwnComment {
-  id: string;
-  pin_number: number | null;
-  comment: string;
-  status: string | null;
-  original_page_url: string | null;
-  pdf_page_number: number | null;
-  mine: boolean;
-}
 
 type Mode = "browse" | "comment";
 type Device = "desktop" | "tablet" | "mobile";
@@ -131,21 +120,6 @@ export default function PublicReview() {
   const [category, setCategory] = useState("general");
   const [priority, setPriority] = useState("normal");
 
-  const [finishOpen, setFinishOpen] = useState(false);
-  const [decision, setDecision] = useState<ReviewDecision>("approved");
-  const [decisionMsg, setDecisionMsg] = useState("");
-  /** This reviewer's own feedback, fetched fresh when the dialog opens. */
-  const [myComments, setMyComments] = useState<OwnComment[]>([]);
-  const [loadingMine, setLoadingMine] = useState(false);
-  const [mineFailed, setMineFailed] = useState(false);
-  /**
-   * Whether the reviewer has picked a decision themselves in this dialog
-   * session. A ref rather than state because the fetch below has to read the
-   * current value, not the one captured when the click handler was created —
-   * choosing Approve while the comments are still loading has to stick.
-   */
-  const decisionTouchedRef = useRef(false);
-  const [submittingDecision, setSubmittingDecision] = useState(false);
 
   // Sidebar
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -355,62 +329,6 @@ export default function PublicReview() {
     setCommentText("");
     setMode("browse");
     setRefreshTick((t) => t + 1);
-  }
-
-  /**
-   * Open the finish dialog with the reviewer's own feedback in front of them.
-   *
-   * Fetched rather than filtered from `comments`, because that list is empty
-   * when the canvas hides other guests' comments, and it is page-scoped while
-   * this needs the whole canvas.
-   */
-  async function openFinish() {
-    setFinishOpen(true);
-    decisionTouchedRef.current = false;
-    if (!shareToken) return;
-
-    setLoadingMine(true);
-    setMineFailed(false);
-    try {
-      const qs = new URLSearchParams({ share_token: shareToken });
-      if (guestToken) qs.set("guest_token", guestToken);
-      const res = await fetch(`${SUPA_URL}/functions/v1/get-public-canvas-comments?${qs.toString()}`, {
-        headers: { apikey: SUPA_KEY },
-      });
-      const json = await res.json();
-      const mine = ((json.comments ?? []) as OwnComment[]).filter((c) => c.mine);
-      setMyComments(mine);
-      if (!decisionTouchedRef.current) setDecision(defaultReviewDecision(mine.length));
-    } catch {
-      // The overview is a convenience — never block finishing the review on it,
-      // but a failed fetch must not masquerade as "you said nothing".
-      setMyComments([]);
-      setMineFailed(true);
-    } finally {
-      setLoadingMine(false);
-    }
-  }
-
-  function chooseDecision(next: ReviewDecision) {
-    decisionTouchedRef.current = true;
-    setDecision(next);
-  }
-
-  async function submitDecision(e: React.FormEvent) {
-    e.preventDefault();
-    if (!shareToken) return;
-    setSubmittingDecision(true);
-    const res = await fetch(`${SUPA_URL}/functions/v1/submit-review-decision`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: SUPA_KEY },
-      body: JSON.stringify({ share_token: shareToken, reviewer_name: guestName, reviewer_email: guestEmail, decision, message: decisionMsg }),
-    });
-    const json = await res.json();
-    setSubmittingDecision(false);
-    if (!res.ok) { toast.error(json.error ?? "Could not submit"); return; }
-    setFinishOpen(false);
-    if (decision === "approved") toast.success("Review finished. Thank you — your approval has been recorded.");
-    else toast.success("Review finished. Your requested changes have been sent to the team.");
   }
 
   // ============ THREAD / REPLIES ============
@@ -737,9 +655,6 @@ export default function PublicReview() {
           </SheetContent>
         </Sheet>
 
-        {canvas.allow_approval && (
-          <Button size="sm" onClick={openFinish}>Finish review</Button>
-        )}
       </header>
 
       {/* Main split — sidebar on LEFT */}
@@ -829,92 +744,6 @@ export default function PublicReview() {
 
 
 
-      {/* Finish review */}
-      <Dialog open={finishOpen} onOpenChange={setFinishOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Finish review</DialogTitle></DialogHeader>
-          <form onSubmit={submitDecision} className="space-y-3">
-            {/* What they said, before they decide what it adds up to. */}
-            {loadingMine ? (
-              <div className="text-xs text-muted-foreground py-2">Gathering your comments…</div>
-            ) : myComments.length > 0 ? (
-              <div className="rounded-lg border border-border overflow-hidden">
-                <div className="px-3 py-2 bg-secondary/60 text-xs font-medium flex items-center justify-between">
-                  <span>Your comments on this review</span>
-                  <span className="text-muted-foreground">{myComments.length}</span>
-                </div>
-                <ul className="max-h-52 overflow-y-auto divide-y divide-border">
-                  {myComments.map((c) => {
-                    const resolved = c.status === "resolved";
-                    let page = "";
-                    try { page = c.original_page_url ? new URL(c.original_page_url).pathname : ""; }
-                    catch { page = c.original_page_url ?? ""; }
-                    return (
-                      <li key={c.id} className="flex gap-2 px-3 py-2">
-                        <span className="mt-0.5 grid place-items-center w-5 h-5 shrink-0 rounded-full bg-pin text-pin-foreground text-[10px] font-bold">
-                          {c.pin_number ?? "•"}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className={`text-xs leading-snug ${resolved ? "line-through text-muted-foreground" : ""}`}>
-                            {c.comment}
-                          </p>
-                          <div className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap gap-x-2">
-                            {page && <span className="truncate max-w-[160px]">{page}</span>}
-                            {c.pdf_page_number ? <span>p.{c.pdf_page_number}</span> : null}
-                            {resolved && <span className="text-success">Already resolved</span>}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : mineFailed ? (
-              <p className="text-xs text-warning">
-                Your comments couldn't be loaded just now — you can still finish the review.
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No comments from this browser yet. Anything you left on another device, in a
-                private window, or before clearing site data won't be listed here.
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => chooseDecision("approved")} className={`p-4 rounded-lg border text-center ${decision === "approved" ? "border-success bg-success/10" : "border-border"}`}>
-                <Check className={`w-5 h-5 mx-auto mb-1 ${decision === "approved" ? "text-success" : "text-muted-foreground"}`} />
-                <div className="text-sm font-medium">Approve</div>
-              </button>
-              <button type="button" onClick={() => chooseDecision("changes_requested")} className={`p-4 rounded-lg border text-center ${decision === "changes_requested" ? "border-destructive bg-destructive/10" : "border-border"}`}>
-                <X className={`w-5 h-5 mx-auto mb-1 ${decision === "changes_requested" ? "text-destructive" : "text-muted-foreground"}`} />
-                <div className="text-sm font-medium">Request changes</div>
-              </button>
-            </div>
-
-            {myComments.length > 0 && decision === "approved" && (
-              <p className="text-xs text-warning">
-                You're approving with {myComments.length} open comment{myComments.length === 1 ? "" : "s"}. The team
-                will still see {myComments.length === 1 ? "it" : "them"}, but the canvas will be marked as signed off.
-              </p>
-            )}
-
-            <div><Label>Your name</Label><Input value={guestName} onChange={(e) => setGuestName(e.target.value)} required /></div>
-            <div><Label>Email</Label><Input type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} /></div>
-            <div>
-              <Label>Optional message</Label>
-              <Textarea
-                rows={3}
-                placeholder={decision === "changes_requested" ? "Anything to add beyond the comments above?" : "Anything to pass on with your approval?"}
-                value={decisionMsg}
-                onChange={(e) => setDecisionMsg(e.target.value)}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={submittingDecision}>
-              {submittingDecision ? "Submitting…" : decision === "approved" ? "Approve review" : "Request changes"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

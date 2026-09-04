@@ -50,6 +50,38 @@ export function assignmentLabel(assignedTo?: string | null): string {
   return isAssigned(assignedTo) ? "Assigned" : "Unassigned";
 }
 
+/**
+ * How much live feedback sits in each status.
+ *
+ * Returns every status, including the empty ones, in workflow order — a canvas
+ * showing "0 New" is telling you something, and a bucket that appears and
+ * disappears is harder to read at a glance than one that is always there.
+ *
+ * Soft-deleted rows are excluded: they are deleted everywhere else, and a
+ * count that includes them is the kind of quiet disagreement that makes a
+ * dashboard untrustworthy.
+ */
+export function countByStatus(
+  items: readonly { status?: string | null; deleted_at?: string | null }[] | null | undefined,
+): { status: FeedbackStatus; count: number }[] {
+  const tally = new Map<string, number>(FEEDBACK_STATUSES.map((s) => [s, 0]));
+  for (const item of items ?? []) {
+    if (item?.deleted_at) continue;
+    const key = String(item?.status ?? "");
+    if (tally.has(key)) tally.set(key, (tally.get(key) ?? 0) + 1);
+  }
+  return FEEDBACK_STATUSES.map((status) => ({ status, count: tally.get(status) ?? 0 }));
+}
+
+/** How many items still need someone to act on them. */
+export function openCount(
+  items: readonly { status?: string | null; deleted_at?: string | null }[] | null | undefined,
+): number {
+  return countByStatus(items)
+    .filter(({ status }) => ACTIVE_STATUSES.includes(status))
+    .reduce((sum, { count }) => sum + count, 0);
+}
+
 export const FEEDBACK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 
 export type FeedbackPriority = (typeof FEEDBACK_PRIORITIES)[number];

@@ -10,6 +10,47 @@ const corsHeaders = {
 
 const BROWSERLESS_BASE = "https://production-sfo.browserless.io";
 
+/**
+ * How long one capture attempt may take, and how many to make.
+ *
+ * The original code passed no signal to `fetch`, so a provider that accepted
+ * the connection and then stalled held the invocation until the platform's own
+ * socket timeout — around two minutes of a function's budget spent on a request
+ * that was never going to answer. A connect timeout is also the most transient
+ * failure there is: the retry below is what turns "the screenshot is gone" into
+ * "the screenshot took a moment".
+ */
+const ATTEMPT_TIMEOUT_MS = 45_000;
+const MAX_ATTEMPTS = 3;
+const BACKOFF_MS = [1_000, 4_000];
+
+/**
+ * Strip the API token out of anything on its way to a log, an error column or
+ * a screen.
+ *
+ * Deno puts the whole request URL into the message of a network error, and that
+ * URL carries `?token=…`. That string was being written verbatim into
+ * `feedback_items.screenshot_error`, where it is shown to any signed-in team
+ * member and read back out of the database — which is precisely how a live
+ * token ended up being pasted into a chat window. The provider takes the token
+ * as a query parameter, so it cannot be moved to a header; it can be kept out
+ * of everything downstream.
+ */
+function redact(value: unknown, secret?: string): string {
+  let text = String(value ?? "");
+  if (secret) text = text.split(secret).join("[redacted]");
+  // Belt and braces: catch any `token=` shape, including one we did not supply.
+  return text.replace(/([?&]token=)[^&\s)"']+/gi, "$1[redacted]");
+}
+
+/** Failures worth trying again: the connection never landed, or the far end wobbled. */
+function isRetryable(status?: number): boolean {
+  if (status === undefined) return true; // network-level: connect timeout, DNS, reset
+  return status === 408 || status === 429 || status >= 500;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function pinScript(opts: {
   scrollX: number;
   scrollY: number;
@@ -192,33 +233,55 @@ Deno.serve(async (req) => {
     viewportWidth, viewportHeight, scrollX, scrollY,
   });
 
+  const endpoint = `${BROWSERLESS_BASE}/screenshot?token=${encodeURIComponent(BROWSERLESS_KEY)}`;
+
   let blob: ArrayBuffer | null = null;
-  try {
-    const res = await fetch(
-      `${BROWSERLESS_BASE}/screenshot?token=${encodeURIComponent(BROWSERLESS_KEY)}`,
-      {
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // Deno's fetch has no per-request timeout; without this an accepted-then-
+    // silent connection holds the whole invocation.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), ATTEMPT_TIMEOUT_MS);
+    try {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(browserlessPayload),
-      },
-    );
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("[capture-screenshot] Browserless error", res.status, text.slice(0, 500));
-      await setStatus(admin, item.id, {
-        screenshot_status: "failed",
-        screenshot_error: `Browserless ${res.status}: ${text.slice(0, 280)}`,
+        signal: abort.signal,
       });
-      return new Response(JSON.stringify({ ok: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+      if (res.ok) {
+        blob = await res.arrayBuffer();
+        break;
+      }
+
+      const text = redact(await res.text(), BROWSERLESS_KEY);
+      lastError = `Browserless ${res.status}: ${text.slice(0, 240)}`;
+      console.error("[capture-screenshot] provider error", {
+        attempt, status: res.status, detail: text.slice(0, 300),
       });
+      // A 4xx that is not 408/429 is our request being wrong; repeating it
+      // just spends the budget to be told the same thing.
+      if (!isRetryable(res.status)) break;
+    } catch (e) {
+      const aborted = (e as Error)?.name === "AbortError";
+      lastError = aborted
+        ? `Timed out after ${ATTEMPT_TIMEOUT_MS / 1000}s`
+        : `Network error: ${redact(e, BROWSERLESS_KEY).slice(0, 240)}`;
+      console.error("[capture-screenshot] attempt failed", { attempt, detail: lastError });
+    } finally {
+      clearTimeout(timer);
     }
-    blob = await res.arrayBuffer();
-  } catch (e) {
-    console.error("[capture-screenshot] fetch failed", e);
+
+    if (attempt < MAX_ATTEMPTS) await sleep(BACKOFF_MS[attempt - 1] ?? 4_000);
+  }
+
+  if (!blob) {
     await setStatus(admin, item.id, {
       screenshot_status: "failed",
-      screenshot_error: `Network error: ${String(e).slice(0, 280)}`,
+      // Already redacted above; sliced again so the column stays readable.
+      screenshot_error: `${lastError.slice(0, 260)} (after ${MAX_ATTEMPTS} attempts)`,
     });
     return new Response(JSON.stringify({ ok: false }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -243,7 +306,7 @@ Deno.serve(async (req) => {
     console.error("[capture-screenshot] upload failed", upErr.message);
     await setStatus(admin, item.id, {
       screenshot_status: "failed",
-      screenshot_error: `Upload failed: ${upErr.message}`,
+      screenshot_error: `Upload failed: ${redact(upErr.message, BROWSERLESS_KEY).slice(0, 260)}`,
     });
     return new Response(JSON.stringify({ ok: false }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

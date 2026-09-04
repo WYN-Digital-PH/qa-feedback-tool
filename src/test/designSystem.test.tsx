@@ -18,7 +18,9 @@ import NotFound from "@/pages/NotFound";
 import { brand, brandByline, pageTitle } from "@/config/brand";
 import {
   FEEDBACK_STATUSES,
+  countByStatus,
   humanize,
+  openCount,
   statusBadgeClass,
   statusSolidClass,
   statusTone,
@@ -132,5 +134,56 @@ describe("standalone pages render", () => {
     withRouter(<NotFound />);
     expect(screen.getByText("404")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Return home" })).toHaveAttribute("href", "/");
+  });
+});
+
+describe("the canvas status tally", () => {
+  const items = [
+    { id: "a", status: "new" },
+    { id: "b", status: "new" },
+    { id: "c", status: "in_progress" },
+    { id: "d", status: "resolved" },
+    { id: "e", status: "resolved", deleted_at: "2026-09-05T00:00:00Z" },
+  ];
+
+  it("reports every status, empty ones included", () => {
+    // A bucket that appears and disappears is harder to scan than a fixed row,
+    // and "0 New" is itself information.
+    const tally = countByStatus(items);
+    expect(tally.map((t) => t.status)).toEqual([...FEEDBACK_STATUSES]);
+  });
+
+  it("counts what is there", () => {
+    const by = Object.fromEntries(countByStatus(items).map((t) => [t.status, t.count]));
+    expect(by.new).toBe(2);
+    expect(by.in_progress).toBe(1);
+    expect(by.ready_for_qa).toBe(0);
+  });
+
+  it("leaves soft-deleted feedback out, as every other count does", () => {
+    const by = Object.fromEntries(countByStatus(items).map((t) => [t.status, t.count]));
+    expect(by.resolved).toBe(1);
+  });
+
+  it("adds up to the live total", () => {
+    const total = countByStatus(items).reduce((n, t) => n + t.count, 0);
+    expect(total).toBe(items.filter((i) => !i.deleted_at).length);
+  });
+
+  it("counts everything not signed off as open", () => {
+    expect(openCount(items)).toBe(3);
+  });
+
+  it("copes with nothing at all", () => {
+    expect(countByStatus([]).every((t) => t.count === 0)).toBe(true);
+    expect(countByStatus(null).every((t) => t.count === 0)).toBe(true);
+    expect(openCount(undefined)).toBe(0);
+  });
+
+  it("ignores a status the vocabulary no longer has", () => {
+    // A row left behind by a migration that has not run yet must not be
+    // counted into a bucket it does not belong to.
+    const tally = countByStatus([{ id: "x", status: "changes_needed" }]);
+    expect(tally.reduce((n, t) => n + t.count, 0)).toBe(0);
   });
 });

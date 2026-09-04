@@ -1,70 +1,43 @@
 /**
- * Finishing a public review.
+ * The guest review canvas.
  *
- * The dialog shows the reviewer what they said before asking what it adds up
- * to, and starts on the option their own comments imply. Two things make that
- * fragile enough to guard: the comment list the page already holds is not the
- * right source, and the default has to stop moving once the reviewer picks.
+ * The finish-review flow — the dialog where a reviewer approved or requested
+ * changes — was removed: it asked a client to summarise a judgement they had
+ * already expressed comment by comment, and it complicated the one workflow
+ * that has to stay simple. The tests for it went with it.
+ *
+ * What remains is what still carries the guest experience: the token that
+ * proves ownership of a pin without a login, and the endpoint that decides
+ * which comments a reviewer may see.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { defaultReviewDecision } from "@/lib/reviewDecision";
 import { UUID_RE, randomUuid, readOrCreateGuestToken } from "@/lib/guestToken";
 
 const ROOT = path.resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8").replace(/\r\n/g, "\n");
 
 const PAGE = read("src/pages/PublicReview.tsx");
+const PROJECT = read("src/pages/ProjectDetail.tsx");
 const FN = read("supabase/functions/get-public-canvas-comments/index.ts");
-const HISTORY = read("src/components/canvas/ApprovalHistory.tsx");
-const CLOSE_MIGRATION = read("supabase/migrations/20260901120000_close_change_request_rounds.sql");
 
-describe("the default decision", () => {
-  it("is request changes when the reviewer raised anything", () => {
-    expect(defaultReviewDecision(1)).toBe("changes_requested");
-    expect(defaultReviewDecision(12)).toBe("changes_requested");
+describe("the finish-review flow is gone", () => {
+  it("leaves no button on the guest canvas", () => {
+    expect(PAGE).not.toContain("Finish review");
+    expect(PAGE).not.toContain("submit-review-decision");
   });
 
-  it("is approve when they raised nothing", () => {
-    expect(defaultReviewDecision(0)).toBe("approved");
-  });
-});
-
-describe("the finish dialog", () => {
-  it("applies the default only until the reviewer picks for themselves", () => {
-    // The comments load asynchronously; choosing Approve while they are still
-    // arriving has to stick, so the flag is a ref rather than state — reading
-    // state here would give the value captured when the handler was created.
-    expect(PAGE).toContain("decisionTouchedRef");
-    expect(PAGE).toMatch(/if \(!decisionTouchedRef\.current\) setDecision\(defaultReviewDecision\(/);
-    expect(PAGE).toMatch(/function chooseDecision[\s\S]{0,120}decisionTouchedRef\.current = true/);
+  it("leaves nothing of the dialog behind it", () => {
+    // Dead state is how a removed feature comes back by accident.
+    for (const symbol of ["finishOpen", "openFinish", "submitDecision", "decisionMsg", "myComments"]) {
+      expect(PAGE, `${symbol} survived the removal`).not.toContain(symbol);
+    }
   });
 
-  it("resets that flag each time the dialog opens", () => {
-    expect(PAGE).toMatch(/setFinishOpen\(true\);\s*\n\s*decisionTouchedRef\.current = false;/);
-  });
-
-  it("never wires a decision button straight to setDecision", () => {
-    // That would bypass the flag and let a later fetch overwrite the choice.
-    expect(PAGE).not.toMatch(/onClick=\{\(\) => setDecision\(/);
-  });
-
-  it("fetches the reviewer's own comments rather than reusing the page list", () => {
-    // `comments` is empty when the canvas hides other guests' feedback, and is
-    // scoped to the current page; the overview needs the whole canvas.
-    expect(PAGE).toMatch(/async function openFinish/);
-    expect(PAGE).toMatch(/get-public-canvas-comments\?\$\{qs\.toString\(\)\}/);
-    expect(PAGE).toMatch(/\.filter\(\(c\b[^)]*\) => c\.mine\)/);
-  });
-
-  it("still lets the review be finished if that fetch fails", () => {
-    expect(PAGE).toMatch(/catch \{[\s\S]{0,200}setMyComments\(\[\]\)/);
-  });
-
-  it("warns when approving with comments outstanding", () => {
-    expect(PAGE).toMatch(/myComments\.length > 0 && decision === "approved"/);
+  it("takes the approval history off the project page with it", () => {
+    expect(PROJECT).not.toContain("ApprovalHistory");
   });
 });
 
@@ -113,83 +86,6 @@ describe("the guest token", () => {
     const t = readOrCreateGuestToken("share-legacy");
     expect(t).toMatch(UUID_RE);
     expect(localStorage.getItem("phlash_guest_token_share-legacy")).toBe(t);
-  });
-});
-
-describe("closing a round of requested changes", () => {
-  /**
-   * `review_decisions` was append-only and the canvas card rendered every row,
-   * so "changes requested" was permanent: resolving every comment the reviewer
-   * raised left the warning exactly where it was, with nothing anywhere in the
-   * product able to clear it.
-   */
-  it("gives a decision somewhere to record that it was dealt with", () => {
-    expect(CLOSE_MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS addressed_at TIMESTAMPTZ/);
-    expect(CLOSE_MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS addressed_by UUID/);
-  });
-
-  it("keeps what the reviewer said immutable", () => {
-    // Acknowledging a round must not become a way to rewrite the client's
-    // verdict, so the record itself is frozen against UPDATE by a trigger.
-    expect(CLOSE_MIGRATION).toMatch(/NEW\.decision\s+IS DISTINCT FROM OLD\.decision/);
-    expect(CLOSE_MIGRATION).toMatch(/NEW\.message\s+IS DISTINCT FROM OLD\.message/);
-    expect(CLOSE_MIGRATION).toMatch(/RAISE EXCEPTION/);
-    expect(CLOSE_MIGRATION).toMatch(/CREATE TRIGGER review_decisions_freeze_record/);
-  });
-
-  it("stamps who closed it and when on the server", () => {
-    // Otherwise a client could backdate a round or credit somebody else.
-    expect(CLOSE_MIGRATION).toMatch(/NEW\.addressed_at := now\(\)/);
-    expect(CLOSE_MIGRATION).toMatch(/NEW\.addressed_by := COALESCE\(auth\.uid\(\)/);
-  });
-
-  it("lets only a role that can sign off a fix close a round", () => {
-    expect(CLOSE_MIGRATION).toMatch(
-      /CREATE POLICY "close change requests"[\s\S]{0,300}has_permission\(auth\.uid\(\), 'feedback\.resolve'\)/,
-    );
-  });
-
-  it("reopening a round drops the attribution with it", () => {
-    expect(CLOSE_MIGRATION).toMatch(/IF NEW\.addressed_at IS NULL THEN[\s\S]{0,160}addressed_by\s+:= NULL/);
-  });
-
-  it("will not let an already-closed round have its stamp moved", () => {
-    // Otherwise re-sending a different timestamp would rewrite it, and the
-    // server-side stamp would be worth no more than a client-supplied one.
-    expect(CLOSE_MIGRATION).toMatch(/ELSE[\s\S]{0,220}NEW\.addressed_at := OLD\.addressed_at/);
-  });
-});
-
-describe("the canvas approval summary", () => {
-  it("treats only unaddressed change requests as outstanding", () => {
-    expect(HISTORY).toMatch(/d\.decision === "changes_requested" && !d\.addressed_at/);
-  });
-
-  it("offers the close action only to a role allowed to sign off", () => {
-    expect(HISTORY).toMatch(/can\("feedback\.resolve"\)/);
-  });
-
-  it("treats a blocked update as a refusal rather than a success", () => {
-    // RLS reports one as zero rows, not an error, so checking `error` alone
-    // would report closing a round the caller was never allowed to close.
-    expect(HISTORY).toMatch(/if \(error \|\| !data\?\.length\)/);
-  });
-
-  it("still keeps the decision log reachable under the summary", () => {
-    // The point is to stop the log doubling as a status, not to lose history.
-    expect(HISTORY).toContain("Approval history");
-  });
-
-  it("starts with the log closed so cards keep a uniform height", () => {
-    // A canvas on its sixth round would otherwise stand several times taller
-    // than the ones either side of it.
-    expect(HISTORY).toMatch(/const \[historyOpen, setHistoryOpen\] = useState\(false\)/);
-    expect(HISTORY).toMatch(/hidden=\{!historyOpen\}/);
-    expect(HISTORY).toMatch(/aria-expanded=\{historyOpen\}/);
-  });
-
-  it("bounds the log even once it is open", () => {
-    expect(HISTORY).toMatch(/max-h-52 overflow-y-auto/);
   });
 });
 
