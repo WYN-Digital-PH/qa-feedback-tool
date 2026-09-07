@@ -115,13 +115,43 @@ describe("notification sound", () => {
   });
 });
 
-describe("the permission matrix", () => {
+describe("the permission panel", () => {
+  const panel = read("src/components/settings/RolePermissions.tsx");
+
   it("is shown only to owners and admins", () => {
     const settings = read("src/pages/Settings.tsx");
     expect(settings).toMatch(/const canSeePermissions = isOwner \|\| roles\.includes\("admin"\)/);
     expect(settings).toMatch(/\{canSeePermissions && \(/);
     // And the panel must sit inside that guard, not merely after it.
     expect(settings.indexOf("canSeePermissions &&")).toBeLessThan(settings.indexOf("<RolePermissions />"));
+  });
+
+  it("gives every role its own tab", () => {
+    expect(panel).toMatch(/ROLES\.map\(\(role\) => \([\s\S]{0,200}<TabsTrigger/);
+    expect(panel).toContain("setActiveRole");
+  });
+
+  it("uses a switch per permission, not a checkbox", () => {
+    expect(panel).toContain("<Switch");
+    expect(panel).not.toContain("<Checkbox");
+    expect(panel).not.toContain('from "@/components/ui/checkbox"');
+  });
+
+  it("folds each category away and says how much of it is on", () => {
+    expect(panel).toContain("<AccordionItem");
+    expect(panel).toMatch(/items\.filter\(\(p\) => isAllowed\(role, p\.key\)\)\.length/);
+    expect(panel).toContain("{on} of {items.length} on");
+    // Categories start shut, so the count on a closed header is the only thing
+    // saying what a role can do — it has to be there, and no category may be
+    // opened by default.
+    expect(panel).not.toContain("defaultValue=");
+  });
+
+  it("still refuses to edit what the database will not accept", () => {
+    // The owner is all-permissions by definition and locked rows are fixed, so
+    // neither may be switched however the layout changes.
+    expect(panel).toContain('const editable = isOwner && role !== "owner" && !p.is_locked');
+    expect(panel).toContain("disabled={!editable || saving === cell}");
   });
 });
 

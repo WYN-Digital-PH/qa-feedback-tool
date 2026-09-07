@@ -1,23 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { blockedReason, fetchGuarded } from "./ssrf.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const PRIVATE_HOSTS = [
-  "localhost", "127.0.0.1", "0.0.0.0", "::1",
-];
-const PRIVATE_RANGES = [
-  /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./,
-  /^169\.254\./, /^fc/, /^fd/,
-];
-
-function isPrivateHost(host: string): boolean {
-  const h = host.toLowerCase();
-  if (PRIVATE_HOSTS.includes(h)) return true;
-  return PRIVATE_RANGES.some((re) => re.test(h));
-}
 
 function sameRegistrableDomain(a: string, b: string): boolean {
   // Simple suffix match: allow exact or subdomain match
@@ -643,8 +630,9 @@ Deno.serve(async (req) => {
     if (!["http:", "https:"].includes(target.protocol)) {
       return new Response("Only http/https allowed", { status: 400, headers: corsHeaders });
     }
-    if (isPrivateHost(target.hostname)) {
-      return new Response("Private addresses are not allowed", { status: 403, headers: corsHeaders });
+    const blocked = await blockedReason(target);
+    if (blocked) {
+      return new Response(blocked, { status: 403, headers: corsHeaders });
     }
 
     const supabase = createClient(
@@ -675,8 +663,7 @@ Deno.serve(async (req) => {
     // Fetch target
     let upstream: Response;
     try {
-      upstream = await fetch(target.toString(), {
-        redirect: "follow",
+      upstream = await fetchGuarded(target, {
         headers: {
           // Hosting WAFs (nginx/WordPress firewalls) routinely 403 any UA containing
           // the crawler signature `Mozilla/5.0 (compatible...`, which is what the

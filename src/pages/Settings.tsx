@@ -139,7 +139,7 @@ export default function Settings() {
             )}
 
             {/* Owners and admins only. Everyone else sees their own role above; the
-                full matrix is a map of the workspace's access model and stays with
+                full set is a map of the workspace's access model and stays with
                 the people who run it. Editing remains owner-only, enforced by RLS. */}
             {canSeePermissions && (
               <CollapsibleCard

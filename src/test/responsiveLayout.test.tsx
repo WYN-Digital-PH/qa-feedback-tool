@@ -42,8 +42,15 @@ describe("wide lists scroll instead of clipping", () => {
     expect(text).toMatch(/min-w-\[\d+px\]/);
   });
 
-  it("keeps the permission matrix scrollable", () => {
-    expect(source("src/components/settings/RolePermissions.tsx")).toContain('<div className="overflow-x-auto">');
+  /**
+   * Permissions used to be a six-role-wide matrix that had to scroll sideways.
+   * It is a tab per role now, so there is nothing wide left to scroll — the
+   * requirement is that it stays that way rather than growing another table.
+   */
+  it("shows permissions one role at a time instead of a wide matrix", () => {
+    const text = source("src/components/settings/RolePermissions.tsx");
+    expect(text).not.toContain("<table");
+    expect(text).toContain("<TabsTrigger");
   });
 });
 
