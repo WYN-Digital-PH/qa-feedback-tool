@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bell, MessageSquare, Monitor, Reply, UserCheck, Volume2, VolumeX } from "lucide-react";
+import { AtSign, Bell, MessageSquare, Monitor, Reply, UserCheck, Volume2, VolumeX } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { playNotificationChime, setSoundEnabled, soundEnabled } from "@/lib/notificationSound";
@@ -20,7 +20,7 @@ const STORAGE_KEY = "phlash_notifications_last_seen";
 
 interface NotifItem {
   id: string;
-  kind: "feedback" | "reply" | "assigned";
+  kind: "feedback" | "reply" | "assigned" | "mention";
   created_at: string;
   title: string;
   subtitle: string;
@@ -136,7 +136,9 @@ export default function NotificationBell() {
   const items: NotifItem[] = useMemo(() => {
     const mine: NotifItem[] = personal.map((n) => ({
       id: `n-${n.id}`,
-      kind: "assigned",
+      // The row says what it is; a mention is not an assignment and should
+      // not borrow its icon.
+      kind: n.kind === "comment_mention" ? "mention" : "assigned",
       created_at: n.created_at,
       title: n.title,
       subtitle: n.body ?? "",
@@ -211,7 +213,7 @@ export default function NotificationBell() {
     if (next) void playNotificationChime();
   }
 
-  const ICONS = { feedback: MessageSquare, reply: Reply, assigned: UserCheck } as const;
+  const ICONS = { feedback: MessageSquare, reply: Reply, assigned: UserCheck, mention: AtSign } as const;
 
   return (
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) markRead(); }}>
@@ -284,7 +286,7 @@ export default function NotificationBell() {
                 className={`block px-4 py-3 border-b border-border last:border-0 hover:bg-secondary/50 ${it.unread ? "bg-primary/5" : ""}`}
               >
                 <div className="flex gap-3">
-                  <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${it.kind === "assigned" ? "text-primary" : "text-muted-foreground"}`} />
+                  <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${it.kind === "assigned" || it.kind === "mention" ? "text-primary" : "text-muted-foreground"}`} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium truncate">{it.title}</div>
                     <div className="text-xs text-muted-foreground line-clamp-2">{it.subtitle}</div>

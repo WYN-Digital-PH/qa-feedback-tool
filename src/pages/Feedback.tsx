@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -18,6 +17,9 @@ import { toast } from "sonner";
 import KanbanBoard from "@/components/feedback/KanbanBoard";
 import { useConfirm } from "@/components/ConfirmDialog";
 import ActivityTimeline from "@/components/feedback/ActivityTimeline";
+import MentionText from "@/components/feedback/MentionText";
+import MentionTextarea from "@/components/feedback/MentionTextarea";
+import { encodeMentions, renderMentionsAsText, type PendingMention } from "@/lib/mentions";
 import { Page, PageHeader } from "@/components/layout/Page";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { commentAuthor, feedbackAuthor, makeNameResolver, profileName } from "@/lib/displayName";
@@ -69,6 +71,9 @@ export default function Feedback() {
   const [selected, setSelected] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newNote, setNewNote] = useState("");
+  // Who the composer has named so far, so their labels can be swapped for
+  // account ids on submit.
+  const [pendingMentions, setPendingMentions] = useState<PendingMention[]>([]);
   const [noteKind, setNoteKind] = useState<"public" | "internal">("internal");
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
@@ -107,6 +112,19 @@ export default function Feedback() {
 
   /** The page's single source of display names. */
   const resolveName = useMemo(() => makeNameResolver(profiles), [profiles]);
+
+  /**
+   * Who can be named in an internal note. Yourself excluded — the trigger
+   * won't notify you about your own note, so offering it only misleads.
+   */
+  const mentionCandidates = useMemo(
+    () =>
+      profiles
+        .filter((p) => p.id !== user?.id)
+        .map((p) => ({ id: p.id, name: profileName(p) ?? "Unknown member", email: p.email }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [profiles, user?.id],
+  );
 
   function assigneeName(id?: string | null): string | null {
     if (!id) return null;
@@ -297,10 +315,14 @@ export default function Feedback() {
     if (!selected || !newNote.trim()) return;
     const { data: { user } } = await supabase.auth.getUser();
     const isInternal = noteKind === "internal";
+    // Mentions are a team thing. A public reply keeps whatever was typed as
+    // plain text, so a client never sees a token and nobody is notified for
+    // being named on a message addressed to them.
+    const body = isInternal ? encodeMentions(newNote.trim(), pendingMentions) : newNote.trim();
     const { error } = await supabase.from("feedback_comments").insert({
       feedback_item_id: selected.id,
       user_id: user?.id,
-      body: newNote.trim(),
+      body,
       is_internal: isInternal,
     });
     if (error) { toast.error(error.message); return; }
@@ -312,6 +334,7 @@ export default function Feedback() {
       action: isInternal ? "internal_note_added" : "public_reply_added",
     });
     setNewNote("");
+    setPendingMentions([]);
     loadComments(selected.id);
   }
 
@@ -624,7 +647,7 @@ export default function Feedback() {
                       </div>
                       {latestReplyMap[it.id] && (
                         <div className="text-xs text-muted-foreground mt-1 italic truncate max-w-md">
-                          ↳ {latestReplyMap[it.id].is_internal ? "[internal] " : ""}{latestReplyMap[it.id].author}: {latestReplyMap[it.id].body}
+                          ↳ {latestReplyMap[it.id].is_internal ? "[internal] " : ""}{latestReplyMap[it.id].author}: {renderMentionsAsText(latestReplyMap[it.id].body, resolveName)}
                         </div>
                       )}
                     </td>
@@ -817,7 +840,7 @@ export default function Feedback() {
                               <span>{commentAuthor(c as any, resolveName)}</span>
                               <span>· {new Date(c.created_at).toLocaleString()}</span>
                             </div>
-                            <div className="whitespace-pre-wrap">{c.body}</div>
+                            <MentionText body={c.body} resolve={resolveName} />
                           </div>
                         ))}
                       </div>
@@ -826,7 +849,17 @@ export default function Feedback() {
                           <button onClick={() => setNoteKind("public")} className={`px-3 py-1 text-xs rounded ${noteKind === "public" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Public reply</button>
                           <button onClick={() => setNoteKind("internal")} className={`px-3 py-1 text-xs rounded ${noteKind === "internal" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Internal note</button>
                         </div>
-                        <Textarea placeholder={noteKind === "public" ? "Reply visible to the client…" : "Note hidden from the client…"} rows={3} value={newNote} onChange={(e) => setNewNote(e.target.value)} />
+                        <MentionTextarea
+                          rows={3}
+                          value={newNote}
+                          onChange={setNewNote}
+                          pending={pendingMentions}
+                          onPendingChange={setPendingMentions}
+                          candidates={noteKind === "internal" ? mentionCandidates : undefined}
+                          placeholder={noteKind === "public"
+                            ? "Reply visible to the client…"
+                            : "Note hidden from the client… type @ to mention a teammate"}
+                        />
                         <div className="flex items-center justify-end">
                           <Button size="sm" onClick={addComment}>Post {noteKind === "public" ? "reply" : "note"}</Button>
                         </div>

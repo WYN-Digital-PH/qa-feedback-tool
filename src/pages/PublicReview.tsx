@@ -357,13 +357,13 @@ export default function PublicReview() {
     setReplies(j.replies ?? []);
   }
 
-  async function submitReply() {
-    if (!threadOpen || !shareToken || !replyText.trim()) return;
+  async function submitReply(body: string) {
+    if (!threadOpen || !shareToken || !body.trim()) return;
     if (canvas?.require_guest_name && !guestName.trim()) { setIdentityOpen(true); return; }
     const r = await fetch(`${SUPA_URL}/functions/v1/submit-guest-reply`, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: SUPA_KEY },
-      body: JSON.stringify({ share_token: shareToken, feedback_item_id: threadOpen, body: replyText, guest_name: guestName, guest_email: guestEmail, guest_token: guestToken }),
+      body: JSON.stringify({ share_token: shareToken, feedback_item_id: threadOpen, body, guest_name: guestName, guest_email: guestEmail, guest_token: guestToken }),
     });
     const j = await r.json();
     if (!r.ok) { toast.error(j.error ?? "Reply failed"); return; }

@@ -3,6 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import MentionText from "@/components/feedback/MentionText";
+import MentionTextarea from "@/components/feedback/MentionTextarea";
+import { decodeForEditing, encodeMentions, type PendingMention } from "@/lib/mentions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -11,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { humanize } from "@/lib/feedbackMeta";
-import { profileName } from "@/lib/displayName";
+import { makeNameResolver, profileName } from "@/lib/displayName";
 
 export interface SidebarItem {
   id: string;
@@ -119,7 +122,11 @@ export interface ReviewSidebarProps {
   canReply: boolean;
   replyText: string;
   setReplyText: (s: string) => void;
-  onSubmitReply: () => void;
+  /**
+   * Receives the body to store, which is not always what is in the box: an
+   * internal note has its @mentions swapped for account ids first.
+   */
+  onSubmitReply: (body: string) => void;
   // optional
   internal?: InternalSidebarProps;
   // reviewer (guest) actions — public canvas only
@@ -136,6 +143,40 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
   const [brokenScreenshotIds, setBrokenScreenshotIds] = useState<Record<string, boolean>>({});
   const [editingItem, setEditingItem] = useState<{ id: string; value: string } | null>(null);
   const [editingReply, setEditingReply] = useState<{ id: string; value: string } | null>(null);
+  const [pendingMentions, setPendingMentions] = useState<PendingMention[]>([]);
+  const [editMentions, setEditMentions] = useState<PendingMention[]>([]);
+
+  // Mentions are for the team's own thread: internal mode, internal note.
+  const mentionsOn = mode === "internal" && internal?.replyKind === "internal";
+
+  /**
+   * Resolves a mentioned account to its current name. Public mode has no
+   * profiles list and no business having one -- a token there renders as a
+   * neutral "@someone" rather than naming a member of staff to a client.
+   */
+  const resolveMention = useMemo(() => makeNameResolver(internal?.profiles), [internal?.profiles]);
+
+  /** Mentions belong to the team's own notes, wherever they are being edited. */
+  const mentionsEditable = (r: SidebarReply) => mode === "internal" && !!r.is_internal;
+
+  /**
+   * Opens the reply editor on readable text. The stored body holds account ids;
+   * putting those in front of the writer would be unreadable, and deleting one
+   * by hand is not how a mention should be removed.
+   */
+  function openReplyEditor(r: SidebarReply) {
+    const { text, pending } = decodeForEditing(r.body, resolveMention);
+    setEditingReply({ id: r.id, value: mentionsEditable(r) ? text : r.body });
+    setEditMentions(mentionsEditable(r) ? pending : []);
+  }
+
+  const mentionCandidates = useMemo(
+    () =>
+      (internal?.profiles ?? [])
+        .map((p) => ({ id: p.id, name: profileName(p) ?? "Unknown member", email: p.email }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [internal?.profiles],
+  );
   // Rendered in both return trees below — the thread view and the list view.
   const { confirm, confirmDialog } = useConfirm();
 
@@ -378,7 +419,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                             <button className="ml-auto p-0.5 rounded hover:bg-secondary" aria-label="Reply options"><MoreHorizontal className="w-3.5 h-3.5" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-32">
-                            <DropdownMenuItem onClick={() => setEditingReply({ id: r.id, value: r.body })}>
+                            <DropdownMenuItem onClick={() => openReplyEditor(r)}>
                               <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -404,7 +445,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                             <button className="ml-auto p-0.5 rounded hover:bg-secondary" aria-label="Reply options"><MoreHorizontal className="w-3.5 h-3.5" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-32">
-                            <DropdownMenuItem onClick={() => setEditingReply({ id: r.id, value: r.body })}>
+                            <DropdownMenuItem onClick={() => openReplyEditor(r)}>
                               <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -431,19 +472,31 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                       </div>
                     ) : editingReply?.id === r.id ? (
                       <div className="space-y-1.5">
-                        <Textarea rows={3} value={editingReply.value} onChange={(e) => setEditingReply({ id: r.id, value: e.target.value })} />
+                        <MentionTextarea
+                          rows={3}
+                          value={editingReply.value}
+                          onChange={(next) => setEditingReply({ id: r.id, value: next })}
+                          pending={editMentions}
+                          onPendingChange={setEditMentions}
+                          candidates={mentionsEditable(r) ? mentionCandidates : undefined}
+                        />
                         <div className="flex gap-1.5">
                           <Button size="sm" className="h-7 text-xs" onClick={async () => {
                             if (!editingReply.value.trim()) return;
                             const fn = mode === "internal" ? internal?.onEditReply : guestActions?.onEditReply;
-                            const ok = fn ? await fn(r.id, editingReply.value.trim()) : false;
+                            // Names go back to ids, so a mention left untouched
+                            // survives the edit intact.
+                            const next = mentionsEditable(r)
+                              ? encodeMentions(editingReply.value.trim(), editMentions)
+                              : editingReply.value.trim();
+                            const ok = fn ? await fn(r.id, next) : false;
                             if (ok !== false) setEditingReply(null);
                           }}>Save</Button>
                           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditingReply(null)}>Cancel</Button>
                         </div>
                       </div>
                     ) : (
-                      <div className="whitespace-pre-wrap">{r.body}</div>
+                      <MentionText body={r.body} resolve={resolveMention} />
                     )}
                   </div>
                 ))
@@ -560,13 +613,30 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                 </TabsList>
               </Tabs>
             )}
-            <Textarea
+            <MentionTextarea
               rows={3}
-              placeholder={mode === "internal" && internal?.replyKind === "internal" ? "Internal note (only your team)…" : "Write a reply…"}
+              placeholder={mentionsOn
+                ? "Internal note (only your team)… type @ to mention a teammate"
+                : mode === "internal" && internal?.replyKind === "internal"
+                  ? "Internal note (only your team)…"
+                  : "Write a reply…"}
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
+              onChange={setReplyText}
+              pending={pendingMentions}
+              onPendingChange={setPendingMentions}
+              candidates={mentionsOn ? mentionCandidates : undefined}
             />
-            <Button size="sm" className="w-full" onClick={onSubmitReply} disabled={!replyText.trim()}>
+            <Button
+              size="sm"
+              className="w-full"
+              disabled={!replyText.trim()}
+              onClick={() => {
+                // Only an internal note carries mentions; a public reply is
+                // sent exactly as it was typed.
+                onSubmitReply(mentionsOn ? encodeMentions(replyText, pendingMentions) : replyText);
+                setPendingMentions([]);
+              }}
+            >
               <Send className="w-3.5 h-3.5 mr-1" />
               Send {mode === "internal" && internal?.replyKind === "internal" ? "note" : "reply"}
             </Button>

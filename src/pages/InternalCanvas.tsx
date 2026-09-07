@@ -463,13 +463,13 @@ export default function InternalCanvas() {
     loadAll();
   }
 
-  async function submitReply() {
-    if (!selectedId || !replyText.trim()) return;
+  async function submitReply(body: string) {
+    if (!selectedId || !body.trim()) return;
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("feedback_comments").insert({
       feedback_item_id: selectedId,
       user_id: u.user?.id,
-      body: replyText,
+      body,
       is_internal: replyKind === "internal",
     });
     if (error) { toast.error(error.message); return; }

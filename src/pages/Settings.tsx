@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import DisplayName from "@/components/settings/DisplayName";
 import TeamMembers from "@/components/settings/TeamMembers";
 import TeamInvites from "@/components/settings/TeamInvites";
 import RolePermissions from "@/components/settings/RolePermissions";
@@ -76,6 +77,9 @@ function CollapsibleCard({ id, title, description, defaultOpen = true, children 
 export default function Settings() {
   const { user, roles, can, isOwner } = useAuth();
   const canManageTeam = can("team.manage");
+  // Bumped when the display name is saved, to remount the team list below with
+  // the new name rather than leaving a stale copy on screen.
+  const [profileVersion, setProfileVersion] = useState(0);
   // Deliberately a role check rather than a permission one: this panel exposes
   // the whole access model of the workspace, and who may look at it is not
   // itself something the matrix should be able to hand out.
@@ -88,9 +92,15 @@ export default function Settings() {
       <div className="grid gap-4 lg:grid-cols-12 items-start">
         {/* Left: short, always-visible facts about you and the workspace. */}
         <div className="space-y-4 lg:col-span-4">
-          <div className="surface-card p-6 space-y-3">
+          <div className="surface-card p-6 space-y-4">
             <SectionHeading>Account</SectionHeading>
-            <div className="text-sm space-y-1">
+
+            {/* The one thing on this card the user can change about themselves.
+                Email and role are set elsewhere -- an address is an identity
+                and a role is granted by an owner. */}
+            <DisplayName onSaved={() => setProfileVersion((v) => v + 1)} />
+
+            <div className="border-t border-border pt-4 text-sm space-y-1">
               <div><span className="text-muted-foreground">Email:</span> {user?.email}</div>
               <div>
                 <span className="text-muted-foreground">Role:</span>{" "}
@@ -119,7 +129,7 @@ export default function Settings() {
                     <TabsTrigger value="invites">Invites</TabsTrigger>
                   </TabsList>
                   <TabsContent value="members">
-                    <TeamMembers />
+                    <TeamMembers key={profileVersion} />
                   </TabsContent>
                   <TabsContent value="invites">
                     <TeamInvites />
