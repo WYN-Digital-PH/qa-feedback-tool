@@ -69,7 +69,7 @@ function Card({ item, onClick, labelChips, assigneeName, authorName }: {
             {assigneeName}
           </span>
         ) : (
-          <span className="shrink-0 capitalize">{humanize(item.priority)}</span>
+          <span className="shrink-0">{humanize(item.priority)}</span>
         )}
       </div>
       {labelChips.length > 0 && (

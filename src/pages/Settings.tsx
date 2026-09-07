@@ -10,7 +10,7 @@ import TeamInvites from "@/components/settings/TeamInvites";
 import RolePermissions from "@/components/settings/RolePermissions";
 import { Page, PageHeader, SectionHeading } from "@/components/layout/Page";
 import { brand } from "@/config/brand";
-import { humanize } from "@/lib/feedbackMeta";
+import { roleLabel } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -94,7 +94,7 @@ export default function Settings() {
               <div><span className="text-muted-foreground">Email:</span> {user?.email}</div>
               <div>
                 <span className="text-muted-foreground">Role:</span>{" "}
-                {roles.length ? roles.map((r) => humanize(r)).join(", ") : "No access yet"}
+                {roles.length ? roles.map((r) => roleLabel(r)).join(", ") : "No access yet"}
               </div>
             </div>
             <Button asChild variant="outline" size="sm">

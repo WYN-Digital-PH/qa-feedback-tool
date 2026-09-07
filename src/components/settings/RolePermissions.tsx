@@ -17,8 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Info, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { EDITABLE_ROLES, ROLES, ROLE_SUMMARY, type Role } from "@/lib/permissions";
-import { humanize } from "@/lib/feedbackMeta";
+import { EDITABLE_ROLES, ROLES, ROLE_SUMMARY, roleLabel, type Role } from "@/lib/permissions";
 import { InlineEmptyState } from "@/components/ui/states";
 
 interface PermissionRow {
@@ -190,7 +189,7 @@ export default function RolePermissions() {
                   <th key={role} className="px-3 py-2 text-center align-bottom">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="text-xs font-medium capitalize cursor-help">{role}</span>
+                        <span className="text-xs font-medium cursor-help">{roleLabel(role)}</span>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-56">
                         {ROLE_SUMMARY[role]}
@@ -259,7 +258,7 @@ export default function RolePermissions() {
             <span className="font-mono">team.manage</span>.
           </p>
           <p>
-            Roles in use: {EDITABLE_ROLES.map((r) => humanize(r)).join(", ")}. See{" "}
+            Roles in use: {EDITABLE_ROLES.map((r) => roleLabel(r)).join(", ")}. See{" "}
             <span className="font-mono">docs/ROLES_AND_PERMISSIONS.md</span> for the full reference.
           </p>
         </div>

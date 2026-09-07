@@ -94,6 +94,26 @@ describe("specific wording", () => {
       .toBe("cleared the assignee");
   });
 
+  /**
+   * The canvas review sidebar used to log every field under a generic `value`
+   * key, so a status change rendered as "moved it to —" and an assignment
+   * claimed the assignee had been *cleared*. The writer names the field now,
+   * but rows in that shape are already stored and still have to read.
+   */
+  it("reads rows the canvas sidebar logged under a generic key", () => {
+    expect(describeActivity("status_changed", { value: "in_progress" }, resolve).summary)
+      .toBe("moved it to In progress");
+    expect(describeActivity("assigned_to_changed", { value: "4b6b3f1e-ca77-44da-b2e0-47d10afa0a9b" }, resolve).summary)
+      .toBe("assigned it to Briggs Pedrera");
+    expect(describeActivity("assigned_to_changed", { value: null }, resolve).summary)
+      .toBe("cleared the assignee");
+  });
+
+  it("still names the field-specific key when both could apply", () => {
+    expect(describeActivity("status_changed", { status: "resolved", value: "new" }, resolve).summary)
+      .toBe("moved it to Resolved");
+  });
+
   it("flags a bulk update, which explains a burst of identical lines", () => {
     expect(describeActivity("status_changed", { status: "resolved", bulk: true }, resolve).summary)
       .toBe("moved it to Resolved (bulk update)");

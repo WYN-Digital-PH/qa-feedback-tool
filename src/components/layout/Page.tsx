@@ -20,7 +20,11 @@ interface PageProps {
 }
 
 export function Page({ children, width = "default", className }: PageProps) {
-  return <div className={cn("p-8", WIDTH[width], className)}>{children}</div>;
+  // `min-w-0` matters: the page sits in a flex row beside the sidebar, and a
+  // flex child defaults to `min-width: auto` -- it refuses to shrink below its
+  // content, so a wide table pushed the whole layout sideways instead of
+  // scrolling inside its own card.
+  return <div className={cn("min-w-0 p-4 sm:p-6 lg:p-8", WIDTH[width], className)}>{children}</div>;
 }
 
 interface PageHeaderProps {
@@ -37,12 +41,14 @@ export function PageHeader({ title, description, eyebrow, actions, className }: 
   return (
     <div className={cn("mb-6", className)}>
       {eyebrow}
-      <div className="flex items-start justify-between gap-4">
+      {/* Actions drop below the title rather than squeezing it once the two no
+          longer fit side by side. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight break-words">{title}</h1>
           {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
         </div>
-        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>}
       </div>
     </div>
   );

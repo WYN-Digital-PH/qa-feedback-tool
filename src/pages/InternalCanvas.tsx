@@ -7,15 +7,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import {
   Eye, MousePointer2, MessageSquare, Monitor, Tablet, Smartphone,
-  ExternalLink, Loader2, ArrowLeft, Lock, Globe,
+  ExternalLink, Loader2, ArrowLeft, Lock, Globe, MessagesSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import ImageReviewCanvas from "@/components/review/ImageReviewCanvas";
 import PdfReviewCanvas from "@/components/review/PdfReviewCanvas";
 import ReviewSidebar from "@/components/review/ReviewSidebar";
+import ClickedElementNote from "@/components/review/ClickedElementNote";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { samePageUrl } from "@/lib/pageUrl";
@@ -484,10 +486,16 @@ export default function InternalCanvas() {
     if (!selected) return;
     const { error } = await supabase.from("feedback_items").update({ [field]: value } as any).eq("id", selected.id);
     if (error) { toast.error(error.message); return; }
+    // Confirm the save. Every other write on this canvas says so; these three
+    // used to save in silence, which reads as nothing having happened.
+    if (field === "status") toast.success(`Status set to ${humanize(value)}`);
+    else if (field === "priority") toast.success(`Priority set to ${humanize(value)}`);
+    else if (field === "assigned_to") toast.success(value ? `Assigned to ${resolveName(value) ?? "that member"}` : "Assignee cleared");
+    else toast.success("Change saved");
     const { data: u } = await supabase.auth.getUser();
     await supabase.from("activity_logs").insert({
       feedback_item_id: selected.id, project_id: canvas.project_id, canvas_id: canvas.id, user_id: u.user?.id,
-      action: `${field}_changed`, details: { value },
+      action: `${field}_changed`, details: { [field]: value },
     });
     loadAll();
   }
@@ -638,56 +646,12 @@ export default function InternalCanvas() {
     );
   }
 
-  return (
-    <div className="h-screen flex flex-col bg-secondary/40">
-      <header className="bg-card border-b border-border px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <Link to={project ? `/projects/${project.id}` : "/projects"} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-        <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center"><Eye className="w-4 h-4 text-primary-foreground" /></div>
-        <div className="hidden md:block min-w-0">
-          <div className="text-sm font-semibold leading-tight flex items-center gap-1.5 truncate">
-            <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-            {canvas.name}
-            <Badge variant="secondary" className="text-[10px] ml-1">Internal</Badge>
-          </div>
-          <div className="text-[11px] text-muted-foreground truncate">{client?.company_name || client?.name} · {project?.name} · <span className="capitalize">{canvas.type}</span></div>
-        </div>
-        {canvas.type === "website" && (
-          <div className="hidden lg:flex items-center gap-1 text-xs bg-secondary px-2.5 py-1 rounded font-mono text-muted-foreground max-w-md truncate">
-            <Globe className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{currentUrl}</span>
-          </div>
-        )}
-        <div className="flex-1" />
-        {canvas.type === "website" && (
-          <>
-            <div className="hidden md:flex bg-secondary rounded-md p-0.5">
-              <button onClick={() => setDevice("desktop")} className={`p-1.5 rounded ${device === "desktop" ? "bg-card shadow-sm" : ""}`}><Monitor className="w-4 h-4" /></button>
-              <button onClick={() => setDevice("tablet")} className={`p-1.5 rounded ${device === "tablet" ? "bg-card shadow-sm" : ""}`}><Tablet className="w-4 h-4" /></button>
-              <button onClick={() => setDevice("mobile")} className={`p-1.5 rounded ${device === "mobile" ? "bg-card shadow-sm" : ""}`}><Smartphone className="w-4 h-4" /></button>
-            </div>
-            <div className="flex bg-secondary rounded-md p-0.5">
-              <button onClick={() => setMode("browse")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${mode === "browse" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
-                <MousePointer2 className="w-3.5 h-3.5" /> Browse
-              </button>
-              <button onClick={() => setMode("comment")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${mode === "comment" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>
-                <MessageSquare className="w-3.5 h-3.5" /> Comment
-              </button>
-            </div>
-          </>
-        )}
-        <Button size="sm" variant="outline" onClick={() => window.open(reviewUrl, "_blank")}>
-          <ExternalLink className="w-3.5 h-3.5 mr-1" /> Public review
-        </Button>
-        {canvas.type === "website" && canvas.website_url && (
-          <Button size="sm" variant="ghost" onClick={() => window.open(canvas.website_url, "_blank")}>
-            <ExternalLink className="w-3.5 h-3.5 mr-1" /> Live site
-          </Button>
-        )}
-      </header>
 
-      <div className="flex-1 flex overflow-hidden" data-review-viewer>
-        <aside className="w-96 border-r border-border bg-card flex flex-col shrink-0">
+  // One definition, rendered either as the left column or -- on a narrow
+  // screen, where a 24rem column would leave nothing for the canvas -- inside
+  // a sheet, the same way the public review page does it.
+  const sidebarContent = (
+    <>
           <ReviewSidebar
             mode="internal"
             items={filtered.map((f: any) => ({ ...f, deleted: !!f.deleted_at, deleted_by_type: f.deleted_by_type ?? null, reply_count: replyCountMap[f.id] ?? 0, author_name: feedbackAuthor(f, resolveName) })) as any}
@@ -789,6 +753,74 @@ export default function InternalCanvas() {
               </div>
             }
           />
+    </>
+  );
+  return (
+    <div className="h-screen flex flex-col bg-secondary/40">
+      <header className="bg-card border-b border-border px-3 sm:px-4 py-2.5 flex items-center gap-2 sm:gap-3 shrink-0 overflow-x-auto">
+        <Link to={project ? `/projects/${project.id}` : "/projects"} className="text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+        <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center"><Eye className="w-4 h-4 text-primary-foreground" /></div>
+        <div className="hidden md:block min-w-0">
+          <div className="text-sm font-semibold leading-tight flex items-center gap-1.5 truncate">
+            <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+            {canvas.name}
+            <Badge variant="secondary" className="text-[10px] ml-1">Internal</Badge>
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate">{client?.company_name || client?.name} · {project?.name} · <span className="capitalize">{canvas.type}</span></div>
+        </div>
+        {canvas.type === "website" && (
+          <div className="hidden lg:flex items-center gap-1 text-xs bg-secondary px-2.5 py-1 rounded font-mono text-muted-foreground max-w-md truncate">
+            <Globe className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{currentUrl}</span>
+          </div>
+        )}
+        <div className="flex-1" />
+        {canvas.type === "website" && (
+          <>
+            <div className="hidden md:flex bg-secondary rounded-md p-0.5">
+              <button onClick={() => setDevice("desktop")} className={`p-1.5 rounded ${device === "desktop" ? "bg-card shadow-sm" : ""}`}><Monitor className="w-4 h-4" /></button>
+              <button onClick={() => setDevice("tablet")} className={`p-1.5 rounded ${device === "tablet" ? "bg-card shadow-sm" : ""}`}><Tablet className="w-4 h-4" /></button>
+              <button onClick={() => setDevice("mobile")} className={`p-1.5 rounded ${device === "mobile" ? "bg-card shadow-sm" : ""}`}><Smartphone className="w-4 h-4" /></button>
+            </div>
+            <div className="flex bg-secondary rounded-md p-0.5">
+              <button onClick={() => setMode("browse")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${mode === "browse" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
+                <MousePointer2 className="w-3.5 h-3.5" /> Browse
+              </button>
+              <button onClick={() => setMode("comment")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${mode === "comment" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>
+                <MessageSquare className="w-3.5 h-3.5" /> Comment
+              </button>
+            </div>
+          </>
+        )}
+        {/* The feedback panel, reachable once it is no longer a column. */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button size="sm" variant="outline" className="lg:hidden">
+              <MessagesSquare className="w-4 h-4 mr-1" /> {feedback.length}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[80vh] p-0 flex flex-col">
+            <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
+              <SheetTitle>Feedback</SheetTitle>
+            </SheetHeader>
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+
+        <Button size="sm" variant="outline" className="hidden sm:inline-flex" onClick={() => window.open(reviewUrl, "_blank")}>
+          <ExternalLink className="w-3.5 h-3.5 mr-1" /> Public review
+        </Button>
+        {canvas.type === "website" && canvas.website_url && (
+          <Button size="sm" variant="ghost" className="hidden md:inline-flex" onClick={() => window.open(canvas.website_url, "_blank")}>
+            <ExternalLink className="w-3.5 h-3.5 mr-1" /> Live site
+          </Button>
+        )}
+      </header>
+
+      <div className="flex-1 flex overflow-hidden" data-review-viewer>
+        <aside className="hidden lg:flex w-96 border-r border-border bg-card flex-col shrink-0">
+          {sidebarContent}
         </aside>
 
         <div className="flex-1 flex overflow-hidden">
@@ -800,6 +832,7 @@ export default function InternalCanvas() {
         <DialogContent>
           <DialogHeader><DialogTitle>Add pin</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <ClickedElementNote text={pending?.element_text} />
             <div>
               <Label className="text-[10px] uppercase text-muted-foreground">Visibility</Label>
               <Tabs value={newKind} onValueChange={(v) => setNewKind(v as any)}>

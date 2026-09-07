@@ -254,6 +254,23 @@ export default function Feedback() {
     // eslint-disable-next-line
   }, [statusFilter, search]);
 
+  /**
+   * What to say once a triage field has saved.
+   *
+   * Status, priority and assignee are the only writes on this page that used to
+   * land without a word, so a change that had saved looked identical to one
+   * that had not.
+   */
+  function savedMessage(field: string, value: string | null): string {
+    if (field === "status") return `Status set to ${humanize(value)}`;
+    if (field === "priority") return `Priority set to ${humanize(value)}`;
+    if (field === "assigned_to") {
+      const name = value ? resolveName(value) : null;
+      return value ? `Assigned to ${name ?? "that member"}` : "Assignee cleared";
+    }
+    return "Change saved";
+  }
+
   async function updateField(field: string, value: any) {
     if (!selected) return;
     const patch: any = { [field]: value };
@@ -261,6 +278,7 @@ export default function Feedback() {
     const { error } = await supabase.from("feedback_items").update(patch).eq("id", selected.id);
     if (error) { toast.error(error.message); return; }
     setSelected({ ...selected, ...patch });
+    toast.success(savedMessage(field, value));
 
     // Activity log
     const { data: { user } } = await supabase.auth.getUser();
@@ -558,8 +576,8 @@ export default function Feedback() {
           authorName={(it) => feedbackAuthor(it, resolveName)}
         />
       ) : (
-        <div className="surface-card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="surface-card overflow-x-auto">
+          <table className="w-full min-w-[64rem] text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-3 w-8">

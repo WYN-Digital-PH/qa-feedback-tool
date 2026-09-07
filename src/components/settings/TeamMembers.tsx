@@ -5,8 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
-import { ROLES, ROLE_SUMMARY, type Role } from "@/lib/permissions";
-import { humanize } from "@/lib/feedbackMeta";
+import { ROLES, ROLE_SUMMARY, roleLabel, type Role } from "@/lib/permissions";
 import { profileName } from "@/lib/displayName";
 
 interface Member {
@@ -128,21 +127,25 @@ export default function TeamMembers() {
               disabled={saving === m.id}
               onValueChange={(v) => changeRole(m, v as Role | "none")}
             >
+              {/* The trigger names the role only. Left to itself Radix mirrors
+                  the whole selected item -- name *and* its summary line -- into
+                  a trigger clamped to one line, which rendered every role as a
+                  truncated "Owner...". */}
               <SelectTrigger className="w-40">
-                <SelectValue />
+                <SelectValue>{m.role ? roleLabel(m.role) : "No access"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No access</SelectItem>
                 {allowedRoles().map((r) => (
                   <SelectItem key={r} value={r}>
-                    <span className="capitalize">{r}</span>
+                    <span>{roleLabel(r)}</span>
                     <span className="block text-xs text-muted-foreground">{ROLE_SUMMARY[r]}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           ) : (
-            <Badge variant="secondary">{m.role ? humanize(m.role) : "No access"}</Badge>
+            <Badge variant="secondary">{m.role ? roleLabel(m.role) : "No access"}</Badge>
           )}
         </div>
       ))}

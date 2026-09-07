@@ -105,7 +105,7 @@ export function describeActivity(
       return { summary: `marked it ${humanize(String(d.value ?? ""))}` };
 
     case "assigned_to_changed": {
-      const who = d.assigned_to;
+      const who = d.assigned_to ?? d.value;
       return {
         summary: who
           ? `assigned it to ${personLabel(who, resolveName)}${bulk}`
@@ -114,7 +114,7 @@ export function describeActivity(
     }
 
     case "status_changed":
-      return { summary: `moved it to ${humanize(String(d.status ?? ""))}${bulk}` };
+      return { summary: `moved it to ${humanize(String(d.status ?? d.value ?? ""))}${bulk}` };
   }
 
   // `${field}_changed` for anything the feedback sheet can edit.

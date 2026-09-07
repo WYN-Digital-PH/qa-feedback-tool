@@ -6,6 +6,7 @@ import { Page, PageHeader, SectionHeading } from "@/components/layout/Page";
 import { InlineEmptyState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { feedbackAuthor, makeNameResolver, type ProfileLike } from "@/lib/displayName";
+import { cn } from "@/lib/utils";
 
 interface Stats {
   projects: number;
@@ -15,14 +16,20 @@ interface Stats {
   resolved: number;
 }
 
-function StatCard({ icon: Icon, label, value, accent }: { icon: LucideIcon; label: string; value: number; accent?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  className,
+}: { icon: LucideIcon; label: string; value: number; accent?: string; className?: string }) {
   return (
-    <div className="surface-card p-5">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">{label}</div>
-        <Icon className={`w-4 h-4 ${accent ?? "text-muted-foreground"}`} />
+    <div className={cn("surface-card p-4 sm:p-5", className)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm text-muted-foreground min-w-0">{label}</div>
+        <Icon className={`w-4 h-4 shrink-0 ${accent ?? "text-muted-foreground"}`} />
       </div>
-      <div className="text-3xl font-semibold mt-2 tabular-nums">{value}</div>
+      <div className="text-2xl sm:text-3xl font-semibold mt-2 tabular-nums">{value}</div>
     </div>
   );
 }
@@ -65,16 +72,28 @@ export default function Dashboard() {
     <Page>
       <PageHeader title="Dashboard" description="Overview of active reviews and recent activity." />
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+      {/* Five cards across a grid whose column count divides them evenly, so the
+          row ends flush with the page instead of leaving a dead slot: two rows
+          of two plus a full-width fifth on a phone, three then two from `sm`,
+          and a single row of five from `lg`. The span on the last card is what
+          closes the gap at the narrower two — revisit it if a sixth stat is
+          added. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         <StatCard icon={FolderKanban} label="Active projects" value={stats.projects} accent="text-primary" />
         <StatCard icon={Sparkles} label="Active canvases" value={stats.canvases} accent="text-primary" />
         <StatCard icon={MessageSquare} label="New feedback" value={stats.newFeedback} accent="text-warning" />
         <StatCard icon={Clock} label="In progress" value={stats.inProgress} />
-        <StatCard icon={CheckCircle2} label="Resolved" value={stats.resolved} accent="text-success" />
+        <StatCard
+          icon={CheckCircle2}
+          label="Resolved"
+          value={stats.resolved}
+          accent="text-success"
+          className="col-span-2 lg:col-span-1"
+        />
       </div>
 
       <div className="surface-card">
-        <div className="px-5 py-4 border-b border-border">
+        <div className="px-4 sm:px-5 py-4 border-b border-border">
           <SectionHeading>Recent feedback</SectionHeading>
         </div>
         {recent.length === 0 ? (
@@ -82,7 +101,7 @@ export default function Dashboard() {
         ) : (
           <div className="divide-y divide-border">
             {recent.map((f) => (
-              <Link key={f.id} to="/feedback" className="flex items-start gap-4 p-4 hover:bg-secondary/40 transition-colors">
+              <Link key={f.id} to={`/feedback?item=${f.id}`} className="flex items-start gap-4 p-4 hover:bg-secondary/40 transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm line-clamp-2">{f.comment}</div>
                   <div className="text-xs text-muted-foreground mt-1">

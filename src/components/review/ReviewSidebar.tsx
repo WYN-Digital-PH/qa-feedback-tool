@@ -347,10 +347,10 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {mode === "public" && guestActions && selectedItem.mine ? (
                     <Select value={selectedItem.status ?? "new"} onValueChange={(v) => guestActions.onSetStatus(selectedItem.id, v)}>
-                      <SelectTrigger className="h-6 text-[10px] w-auto px-2 capitalize"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-6 text-[10px] w-auto px-2"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {guestActions.guestStatuses.map((s) => (
-                          <SelectItem key={s.value} value={s.value} className="capitalize text-xs">{s.label}</SelectItem>
+                          <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -502,15 +502,15 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
               <div>
                 <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
                 <Select value={selectedItem.status ?? "new"} onValueChange={(v) => internal.onUpdate("status", v)}>
-                  <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{internal.statuses.map((s) => <SelectItem key={s} value={s}>{humanize(s)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-[10px] uppercase text-muted-foreground">Priority</Label>
                 <Select value={selectedItem.priority ?? "normal"} onValueChange={(v) => internal.onUpdate("priority", v)}>
-                  <SelectTrigger className="h-8 text-xs capitalize"><SelectValue /></SelectTrigger>
-                  <SelectContent>{internal.priorities.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{internal.priorities.map((p) => <SelectItem key={p} value={p}>{humanize(p)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="col-span-2">
@@ -668,7 +668,7 @@ export default function ReviewSidebar(props: ReviewSidebarProps) {
                                 <span className="text-[10px] uppercase tracking-wide bg-warning/15 text-warning px-1.5 py-0.5 rounded font-semibold">Internal</span>
                               )}
                               {c.priority && c.priority !== "normal" && (
-                                <span className="text-[10px] capitalize text-warning">{c.priority}</span>
+                                <span className="text-[10px] text-warning">{humanize(c.priority)}</span>
                               )}
                               {c.device_type && (
                                 <span className="text-[10px] text-muted-foreground capitalize">{c.device_type}</span>

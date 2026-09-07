@@ -51,6 +51,10 @@ export default function Projects() {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", client_id: "" });
+  // Both fields report their own problem under themselves. The name field
+  // used to lean on the browser's native `required` bubble while a missing
+  // agency raised a toast in the far corner, so one form spoke two ways.
+  const [formErrors, setFormErrors] = useState<{ name?: string; client_id?: string }>({});
   const [saving, setSaving] = useState(false);
 
   const [editing, setEditing] = useState<ProjectRow | null>(null);
@@ -78,7 +82,11 @@ export default function Projects() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.client_id) { toast.error("Select an agency"); return; }
+    const errors: { name?: string; client_id?: string } = {};
+    if (!form.client_id) errors.client_id = "Choose the agency this project belongs to.";
+    if (!form.name.trim()) errors.name = "Give the project a name.";
+    setFormErrors(errors);
+    if (Object.keys(errors).length) return;
     setSaving(true);
     const { error } = await supabase.from("projects").insert({ name: form.name, client_id: form.client_id, created_by: user?.id });
     setSaving(false);
@@ -88,6 +96,7 @@ export default function Projects() {
     }
     toast.success("Project created");
     setForm({ name: "", client_id: "" });
+    setFormErrors({});
     setOpen(false);
     if (scope !== "active") setScope("active"); else load();
   }
@@ -165,23 +174,43 @@ export default function Projects() {
         description="Each project holds one or more review canvases."
         actions={
         can("projects.create") ? (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setFormErrors({}); }}>
           <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" /> New project</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
-            <form onSubmit={create} className="space-y-3">
+            <form onSubmit={create} noValidate className="space-y-3">
               <div>
-                <Label>Agency *</Label>
-                <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select agency" /></SelectTrigger>
+                <Label htmlFor="new-project-agency">Agency *</Label>
+                <Select
+                  value={form.client_id}
+                  onValueChange={(v) => { setForm({ ...form, client_id: v }); setFormErrors((p) => ({ ...p, client_id: undefined })); }}
+                >
+                  <SelectTrigger
+                    id="new-project-agency"
+                    aria-invalid={!!formErrors.client_id}
+                    className={cn(formErrors.client_id && "border-destructive")}
+                  >
+                    <SelectValue placeholder="Select agency" />
+                  </SelectTrigger>
                   <SelectContent>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name || c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {formErrors.client_id && <p className="text-xs text-destructive mt-1">{formErrors.client_id}</p>}
               </div>
-              <div><Label>Project name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div>
+                <Label htmlFor="new-project-name">Project name *</Label>
+                <Input
+                  id="new-project-name"
+                  value={form.name}
+                  aria-invalid={!!formErrors.name}
+                  className={cn(formErrors.name && "border-destructive")}
+                  onChange={(e) => { setForm({ ...form, name: e.target.value }); setFormErrors((p) => ({ ...p, name: undefined })); }}
+                />
+                {formErrors.name && <p className="text-xs text-destructive mt-1">{formErrors.name}</p>}
+              </div>
               <Button type="submit" disabled={saving} className="w-full">{saving ? "Saving…" : "Create project"}</Button>
             </form>
           </DialogContent>

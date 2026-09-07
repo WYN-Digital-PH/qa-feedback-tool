@@ -428,12 +428,12 @@ export default function ProjectDetail() {
             const reviewUrl = `${window.location.origin}/review/${c.share_token}`;
             const Icon = TYPE_ICONS[c.type as CanvasType] ?? Globe;
             return (
-              <div key={c.id} className="surface-card p-5">
-                <div className="flex items-start justify-between gap-4">
+              <div key={c.id} className="surface-card p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="font-semibold">{c.name}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                      <h3 className="font-semibold break-words">{c.name}</h3>
                       <span className="text-[10px] uppercase tracking-wide bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded">{c.type}</span>
                       <span className={`text-xs px-2 py-0.5 rounded ${STATUS_STYLES[c.status] ?? STATUS_STYLES.paused}`}>{c.status}</span>
                     </div>
@@ -447,8 +447,8 @@ export default function ProjectDetail() {
                         Open original file <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     )}
-                    <div className="mt-3 flex items-center gap-2 bg-secondary/50 px-3 py-2 rounded-md text-xs font-mono truncate">
-                      <span className="truncate flex-1 text-muted-foreground">{reviewUrl}</span>
+                    <div className="mt-3 flex items-center gap-2 bg-secondary/50 px-3 py-2 rounded-md text-xs font-mono">
+                      <span className="truncate flex-1 min-w-0 text-muted-foreground">{reviewUrl}</span>
                       <Button size="sm" variant="ghost" className="h-7" onClick={() => copyShare(c.share_token)}><Copy className="w-3.5 h-3.5" /></Button>
                     </div>
                     {/* The settings that change what a guest can actually do,
@@ -486,7 +486,7 @@ export default function ProjectDetail() {
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-wrap gap-2 sm:flex-col sm:shrink-0">
                     <Button size="sm" onClick={() => window.open(`/app/canvas/${c.id}`, "_blank")}>
                       <Eye className="w-3.5 h-3.5 mr-1" /> Internal review
                     </Button>

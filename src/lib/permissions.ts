@@ -36,6 +36,28 @@ export const ROLES = ["owner", "admin", "consultant", "developer", "qa", "viewer
 
 export type Role = (typeof ROLES)[number];
 
+/**
+ * Display label for a role.
+ *
+ * Roles were rendered with a `capitalize` class wherever they appeared, which
+ * turns the initialism `qa` into "Qa". Every user-facing role name comes from
+ * here instead.
+ */
+export const ROLE_LABELS: Record<Role, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  consultant: "Consultant",
+  developer: "Developer",
+  qa: "QA",
+  viewer: "Viewer",
+};
+
+/** Human label for a role value ("qa" -> "QA"). */
+export function roleLabel(role?: string | null): string {
+  if (!role) return "";
+  return ROLE_LABELS[role as Role] ?? role.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /** Short description of what each role is for, shown in Settings. */
 export const ROLE_SUMMARY: Record<Role, string> = {
   owner: "Full control, including these permission settings. Cannot be restricted.",

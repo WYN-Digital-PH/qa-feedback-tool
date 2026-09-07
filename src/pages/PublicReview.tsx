@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import ImageReviewCanvas from "@/components/review/ImageReviewCanvas";
 import PdfReviewCanvas from "@/components/review/PdfReviewCanvas";
 import ReviewSidebar from "@/components/review/ReviewSidebar";
+import ClickedElementNote from "@/components/review/ClickedElementNote";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { readOrCreateGuestToken } from "@/lib/guestToken";
@@ -701,12 +702,7 @@ export default function PublicReview() {
           <DialogHeader><DialogTitle>Leave feedback</DialogTitle></DialogHeader>
           {pending && (
             <div className="space-y-3">
-              {pending.element_text && (
-                <div className="text-xs bg-secondary/50 p-2 rounded">
-                  <div className="text-muted-foreground mb-1">You clicked on:</div>
-                  <div className="line-clamp-2">"{pending.element_text}"</div>
-                </div>
-              )}
+              <ClickedElementNote text={pending.element_text} />
               {pending.pdf_page_number && (
                 <div className="text-xs bg-secondary/50 p-2 rounded">PDF page {pending.pdf_page_number}</div>
               )}

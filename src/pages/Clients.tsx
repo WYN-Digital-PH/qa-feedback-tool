@@ -170,7 +170,7 @@ export default function Clients() {
             <form onSubmit={create} className="space-y-3">
               <div><Label>Contact name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
               <div><Label>Company</Label><Input value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
                 <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
               </div>
@@ -210,8 +210,8 @@ export default function Clients() {
             : "No agencies yet. Add your first agency to get started."}
         />
       ) : (
-        <div className="surface-card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="surface-card overflow-x-auto">
+          <table className="w-full min-w-[46rem] text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="text-left px-4 py-3">Agency</th>
@@ -306,7 +306,7 @@ export default function Clients() {
             <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-70">
               <div><Label>Contact name *</Label><Input required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
               <div><Label>Company</Label><Input value={editForm.company_name} onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
                 <div><Label>Phone</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
               </div>
