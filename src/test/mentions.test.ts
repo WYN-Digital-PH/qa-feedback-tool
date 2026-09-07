@@ -6,7 +6,7 @@
  * forever. These tests hold the same line for mentions.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import {
   decodeForEditing,
@@ -150,9 +150,50 @@ describe("the token pattern the database also has to agree with", () => {
   });
 
   it("does not notify the author, a non-teammate, or a mention that was already there", () => {
-    expect(migration).toContain("mentioned = actor");
-    expect(migration).toContain("NOT public.is_team_member(mentioned)");
-    expect(migration).toContain("mentioned = ANY(already)");
+    const fix = readFileSync(
+      resolvePath(process.cwd(), "supabase/migrations/20260908150000_fix_mention_team_check.sql"),
+      "utf8",
+    );
+    expect(fix).toContain("mentioned = actor");
+    expect(fix).toContain("mentioned = ANY(already)");
+    expect(fix).toMatch(/FROM public\.user_roles ur WHERE ur\.user_id = mentioned/);
+  });
+
+  /**
+   * `is_team_member` does not mean "is this account on the team". Migration
+   * 20260729172424 narrowed it to "is *the caller* on the team", so that a
+   * client cannot probe whether an arbitrary id belongs to the workspace:
+   *
+   *   WHEN auth.uid() IS NULL OR _user_id IS DISTINCT FROM auth.uid() THEN false
+   *
+   * Inside the trigger, auth.uid() is the note's author and the id being tested
+   * is somebody else — so it answered false for every mention and nobody was
+   * ever notified. This is the shape of the bug, not just the instance.
+   */
+  it("never asks is_team_member about a third party", () => {
+    const dir = "supabase/migrations";
+    const live = readdirSync(resolvePath(process.cwd(), dir))
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+
+    // The last definition of the trigger wins, so assert on that one.
+    const latest = live
+      .map((f) => readFileSync(resolvePath(process.cwd(), `${dir}/${f}`), "utf8"))
+      .filter((sql) => sql.includes("FUNCTION public.notify_comment_mentions()"))
+      .pop();
+
+    expect(latest, "no definition of notify_comment_mentions found").toBeDefined();
+
+    // Comments explain the old bug by name, so judge the code, not the prose.
+    const code = latest!
+      .split(/\r?\n/)
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+
+    // `mentioned` is never the caller, so this helper can only ever answer false
+    // about them. Membership has to be read from user_roles directly.
+    expect(code).not.toContain("is_team_member(mentioned)");
+    expect(code).toContain("FROM public.user_roles ur WHERE ur.user_id = mentioned");
   });
 
   it("keeps notifications trigger-written, with no INSERT policy of their own", () => {
