@@ -600,7 +600,7 @@ export default function Feedback() {
         />
       ) : (
         <div className="surface-card overflow-x-auto">
-          <table className="w-full min-w-[64rem] text-sm">
+          <table className="w-full min-w-[20rem] md:min-w-[32rem] lg:min-w-[48rem] xl:min-w-[62rem] text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="px-3 py-3 w-8">
@@ -609,14 +609,14 @@ export default function Feedback() {
                     onCheckedChange={(c) => c ? setSelectedIds(new Set(visibleItems.map((i) => i.id))) : clearSelection()}
                   />
                 </th>
-                <th className="text-left px-4 py-3 w-24">Preview</th>
+                <th className="text-left px-4 py-3 w-24 hidden xl:table-cell">Preview</th>
                 <th className="text-left px-4 py-3">Comment</th>
-                <th className="text-left px-4 py-3">Project</th>
-                <th className="text-left px-4 py-3">Labels</th>
-                <th className="text-left px-4 py-3">Assignee</th>
+                <th className="text-left px-4 py-3 hidden md:table-cell">Project</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Labels</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Assignee</th>
                 <th className="text-left px-4 py-3">Status</th>
-                <th className="text-left px-4 py-3">Priority</th>
-                <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3 hidden sm:table-cell">Priority</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -628,7 +628,7 @@ export default function Feedback() {
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={checked} onCheckedChange={() => toggleSelected(it.id)} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden xl:table-cell">
                       {it.screenshot_url ? (
                         <img src={it.screenshot_url} alt="" className="w-16 h-12 object-cover rounded border border-border" />
                       ) : (
@@ -645,13 +645,18 @@ export default function Feedback() {
                         {it.pdf_page_number ? ` · p.${it.pdf_page_number}` : ""}
                         {it.original_page_url ? ` · ${(() => { try { return new URL(it.original_page_url).pathname; } catch { return it.original_page_url; } })()}` : ""}
                       </div>
+                      <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-2 lg:hidden">
+                        <span className="md:hidden">{it.projects?.name}</span>
+                        <span>{it.assigned_to ? assigneeName(it.assigned_to) : "Unassigned"}</span>
+                        <span>{new Date(it.created_at).toLocaleDateString()}</span>
+                      </div>
                       {latestReplyMap[it.id] && (
                         <div className="text-xs text-muted-foreground mt-1 italic truncate max-w-md">
                           ↳ {latestReplyMap[it.id].is_internal ? "[internal] " : ""}{latestReplyMap[it.id].author}: {renderMentionsAsText(latestReplyMap[it.id].body, resolveName)}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       <div>{(it.projects as any)?.name}</div>
                       <div className="text-xs">{(it.canvases as any)?.name}</div>
                       {it.canvas_id && (
@@ -663,7 +668,7 @@ export default function Feedback() {
                         </button>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden lg:table-cell">
                       <div className="flex flex-wrap gap-1 max-w-[160px]">
                         {itemLabels.slice(0, 3).map((l) => (
                           <span key={l.id} className="text-[10px] px-1.5 py-0.5 rounded text-white" style={{ background: l.color }}>{l.name}</span>
@@ -671,7 +676,7 @@ export default function Feedback() {
                         {itemLabels.length > 3 && <span className="text-[10px] text-muted-foreground">+{itemLabels.length - 3}</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden lg:table-cell">
                       {it.assigned_to ? (
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center">
@@ -686,8 +691,8 @@ export default function Feedback() {
                       )}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={it.status} /></td>
-                    <td className={`px-4 py-3 text-xs ${priorityTextClass(it.priority)}`}>{humanize(it.priority)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(it.created_at).toLocaleDateString()}</td>
+                    <td className={`px-4 py-3 text-xs hidden sm:table-cell ${priorityTextClass(it.priority)}`}>{humanize(it.priority)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground hidden lg:table-cell">{new Date(it.created_at).toLocaleDateString()}</td>
                   </tr>
                 );
               })}

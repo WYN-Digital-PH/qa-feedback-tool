@@ -128,8 +128,11 @@ describe("the permission matrix", () => {
 describe("the feedback inbox", () => {
   const page = read("src/pages/Feedback.tsx");
 
-  it("shows an assignee column", () => {
-    expect(page).toContain('<th className="text-left px-4 py-3">Assignee</th>');
+  it("shows who an item is assigned to", () => {
+    // The column is dropped on a narrow viewport, where the assignee moves into
+    // the row instead — so assert that it is shown, not how wide the window is.
+    expect(page).toMatch(/<th[^>]*>Assignee<\/th>/);
+    expect(page).toContain('assigneeName(it.assigned_to) : "Unassigned"');
   });
 
   it("can filter to the signed-in user's own items", () => {

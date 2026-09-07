@@ -109,3 +109,67 @@ describe("dialogs fit a small screen", () => {
     expect(text).toContain("overflow-y-auto");
   });
 });
+
+describe("list columns adapt to the viewport", () => {
+  /** The responsive visibility classes on a tag, normalised for comparison. */
+  const breakpoints = (tag: string) => {
+    const m = tag.match(/className=(?:"([^"]*)"|\{`([^`]*)`\})/);
+    const cls = (m?.[1] ?? m?.[2] ?? "").split(/\s+/);
+    return cls
+      .filter((t) => t === "hidden" || /^(sm|md|lg|xl):(table-cell|hidden)$/.test(t))
+      .sort()
+      .join(" ");
+  };
+
+  const table = (path: string) => {
+    const src = source(path);
+    const head = src.slice(src.indexOf("<thead"), src.indexOf("</thead>"));
+    const body = src.slice(src.indexOf("<tbody"), src.lastIndexOf("</tbody>"));
+    return {
+      head: (head.match(/<th\b[^>]*>/g) ?? []).map(breakpoints),
+      body: (body.match(/<td\b[^>]*>/g) ?? []).map(breakpoints),
+    };
+  };
+
+  /**
+   * A header and its cells must appear and disappear together. If they drift,
+   * every column to the right of the mismatch renders under the wrong heading —
+   * which looks like data corruption rather than a layout bug.
+   */
+  it.each([
+    ["src/pages/Feedback.tsx", 9],
+    ["src/pages/Clients.tsx", 6],
+  ])("%s keeps headers and cells on the same breakpoints", (path, columns) => {
+    const { head, body } = table(path);
+    expect(head).toHaveLength(columns);
+    expect(body).toHaveLength(columns);
+    expect(body).toEqual(head);
+  });
+
+  it("always shows the columns a row is identified by", () => {
+    // Whatever else goes, the feedback list must still show what was said and
+    // where it stands; the agency list must still name the agency.
+    const feedback = table("src/pages/Feedback.tsx").head;
+    expect(feedback[2], "the comment column must never be hidden").toBe("");
+    expect(feedback[6], "the status column must never be hidden").toBe("");
+    expect(table("src/pages/Clients.tsx").head[0], "the agency column must never be hidden").toBe("");
+  });
+
+  it("raises the scroll floor as more columns appear", () => {
+    // A single wide floor forced a scrollbar even where the reduced set fits.
+    for (const path of ["src/pages/Feedback.tsx", "src/pages/Clients.tsx"]) {
+      const cls = source(path).match(/<table className="([^"]*)"/)?.[1] ?? "";
+      expect(cls, `${path} should scale its min-width`).toMatch(/min-w-\[\d+rem\]/);
+      expect(cls, `${path} should raise the floor at a larger breakpoint`)
+        .toMatch(/(sm|md|lg|xl):min-w-\[\d+rem\]/);
+    }
+  });
+
+  it("keeps what a hidden column held visible in the row", () => {
+    // Dropping a column must not drop the information with it.
+    const src = source("src/pages/Feedback.tsx");
+    expect(src).toContain('className="md:hidden"');
+    expect(src).toMatch(/lg:hidden[\s\S]{0,400}assigneeName\(it\.assigned_to\)/);
+    expect(source("src/pages/Clients.tsx")).toMatch(/truncate md:hidden">\{c\.email\}/);
+  });
+});

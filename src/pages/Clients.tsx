@@ -211,14 +211,14 @@ export default function Clients() {
         />
       ) : (
         <div className="surface-card overflow-x-auto">
-          <table className="w-full min-w-[46rem] text-sm">
+          <table className="w-full min-w-[18rem] sm:min-w-[24rem] md:min-w-[34rem] lg:min-w-[46rem] text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 <th className="text-left px-4 py-3">Agency</th>
-                <th className="text-left px-4 py-3">Contact</th>
-                <th className="text-left px-4 py-3">Website</th>
-                <th className="text-left px-4 py-3">Projects</th>
-                <th className="text-left px-4 py-3">Added</th>
+                <th className="text-left px-4 py-3 hidden md:table-cell">Contact</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Website</th>
+                <th className="text-left px-4 py-3 hidden sm:table-cell">Projects</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell">Added</th>
                 {showMenu && <th className="w-12 px-4 py-3"><span className="sr-only">Actions</span></th>}
               </tr>
             </thead>
@@ -235,12 +235,13 @@ export default function Clients() {
                       {c.notes && <StickyNote className="w-3.5 h-3.5 text-muted-foreground" aria-label="Has notes" />}
                     </div>
                     {c.company_name && <div className="text-xs text-muted-foreground">{c.name}</div>}
+                    {c.email && <div className="text-xs text-muted-foreground truncate md:hidden">{c.email}</div>}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                     <div className="truncate max-w-[220px]">{c.email ?? "—"}</div>
                     {c.phone && <div className="text-xs">{c.phone}</div>}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
                     {c.website_url ? (
                       <a
                         href={c.website_url}
@@ -253,8 +254,8 @@ export default function Clients() {
                       </a>
                     ) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{(c.projects ?? []).length}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(c.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs hidden sm:table-cell">{(c.projects ?? []).length}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell">{new Date(c.created_at).toLocaleDateString()}</td>
                   {showMenu && (
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
