@@ -19,16 +19,23 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const supabase = createClient(
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+
+    // Identify the caller with `getUser`, the way submit-internal-feedback
+    // does. This used to call `supabase.auth.getClaims()`, which does not
+    // exist in the pinned supabase-js@2.45.0 (its auth-js@2.64.4 predates the
+    // method) — so every authenticated upload threw
+    // "getClaims is not a function", was swallowed by the catch below, and
+    // came back as a bare 500. Nothing here is version-specific now.
+    const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(authHeader.replace("Bearer ", ""));
-    if (claimsErr || !claims?.claims?.sub) {
+    const { data: userData, error: userErr } = await admin.auth.getUser(token);
+    if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const userId = claims.claims.sub as string;
+    const userId = userData.user.id;
 
     const form = await req.formData();
     const file = form.get("file") as File | null;
@@ -43,24 +50,22 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing file, canvas_id or project_id" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const allowed = kind === "pdf" ? PDF_MIMES : IMAGE_MIMES;
+    const allowedMimes = kind === "pdf" ? PDF_MIMES : IMAGE_MIMES;
     const max = kind === "pdf" ? MAX_PDF : MAX_IMAGE;
-    if (!allowed.includes(file.type)) {
+    if (!allowedMimes.includes(file.type)) {
       return new Response(JSON.stringify({ error: `Unsupported file type: ${file.type}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (file.size > max) {
       return new Response(JSON.stringify({ error: `File too large (max ${(max/1024/1024)|0}MB)` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
     // Uploading a canvas file is part of creating a canvas. This function writes
     // with the service role, which bypasses RLS, so check the permission here.
-    const { data: allowed } = await admin.rpc("user_has_permission", {
+    const { data: canCreate } = await admin.rpc("user_has_permission", {
       _user_id: userId,
       _permission: "canvases.create",
     });
-    if (!allowed) {
+    if (!canCreate) {
       return new Response(JSON.stringify({ error: "Your role can't add canvas files." }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

@@ -87,12 +87,32 @@ export default function ProjectDetail() {
   }
   useEffect(() => { load(); }, [id]);
 
+  /**
+   * Resolves null if the wrapped promise has not settled in time.
+   *
+   * Both detectors below can hang rather than fail — an image that never fires
+   * either event, or a pdf.js worker that never loads and so never rejects.
+   * What they produce is optional metadata, so a slow answer is worth less
+   * than a form that stays responsive.
+   */
+  function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+    return Promise.race([
+      p.catch(() => null),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+    ]);
+  }
+
   async function detectImageDimensions(f: File): Promise<{ width: number; height: number } | null> {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      img.onerror = () => resolve(null);
-      img.src = URL.createObjectURL(f);
+      const url = URL.createObjectURL(f);
+      const done = (v: { width: number; height: number } | null) => {
+        URL.revokeObjectURL(url);
+        resolve(v);
+      };
+      img.onload = () => done({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => done(null);
+      img.src = url;
     });
   }
 
@@ -147,30 +167,75 @@ export default function ProjectDetail() {
     if (error || !canvas) { setSaving(false); toast.error(error?.message ?? "Could not create canvas"); return; }
 
     // 2. Upload file if image/pdf
+    //
+    // The canvas row already exists, so every path out of here has to either
+    // finish the upload or take the row away again. This used to be a bare
+    // `await fetch` with no try/catch: anything that threw — a rejected fetch,
+    // a non-JSON body — escaped `create()` as an unhandled rejection, so
+    // `setSaving(false)` never ran. The dialog sat on "Saving…" for ever and
+    // the half-made canvas was left behind, which is exactly what an empty
+    // canvas with no file is.
     if (type !== "website" && file) {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("canvas_id", canvas.id);
-      fd.append("project_id", id);
-      fd.append("kind", type);
-      if (type === "image") {
-        const dim = await detectImageDimensions(file);
-        if (dim) { fd.append("width", String(dim.width)); fd.append("height", String(dim.height)); }
-      } else if (type === "pdf") {
-        const pages = await detectPdfPages(file);
-        if (pages) fd.append("page_count", String(pages));
-      }
-      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-canvas-file`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-        body: fd,
-      });
-      const j = await r.json();
-      if (!r.ok) {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("canvas_id", canvas.id);
+        fd.append("project_id", id);
+        fd.append("kind", type);
+
+        // Width, height and page count are nice to have. Reading them must
+        // never hold the upload up: pdf.js in particular can sit for ever if
+        // its worker chunk fails to load, and it never rejects when it does.
+        if (type === "image") {
+          const dim = await withTimeout(detectImageDimensions(file), 8000);
+          if (dim) {
+            fd.append("width", String(dim.width));
+            fd.append("height", String(dim.height));
+          }
+        } else if (type === "pdf") {
+          const pages = await withTimeout(detectPdfPages(file), 8000);
+          if (pages) fd.append("page_count", String(pages));
+        }
+
+        // Deno's fetch has no timeout of its own; without this a stalled
+        // upload is indistinguishable from one still in progress.
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), 120_000);
+        let r: Response;
+        try {
+          r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-canvas-file`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+            body: fd,
+            signal: abort.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+
+        if (!r.ok) {
+          // A failing edge function answers with the gateway's own body, which
+          // is not always the JSON this once assumed.
+          const detail = await r.json().catch(() => null);
+          throw new Error(detail?.error ?? `Upload failed (HTTP ${r.status})`);
+        }
+      } catch (err) {
+        const reason = err instanceof Error
+          ? (err.name === "AbortError" ? "The upload timed out." : err.message)
+          : "Upload failed";
+
+        // Take the empty canvas away again. RLS reports a blocked delete as
+        // zero rows rather than an error, so say plainly when it is still
+        // there instead of leaving a canvas nobody expects.
+        const { data: removed } = await supabase
+          .from("canvases").delete().eq("id", canvas.id).select("id");
+
         setSaving(false);
-        // Cleanup canvas if upload failed
-        await supabase.from("canvases").delete().eq("id", canvas.id);
-        toast.error(j.error ?? "Upload failed");
+        toast.error(
+          removed?.length
+            ? reason
+            : `${reason} The empty canvas could not be removed — delete it from this page.`,
+        );
         return;
       }
     }
