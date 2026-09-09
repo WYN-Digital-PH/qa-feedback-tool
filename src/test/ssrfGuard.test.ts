@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * The website-preview proxy's SSRF guard.
  *

@@ -50,6 +50,34 @@ Deno.serve(async (req) => {
     const proj = canvas.projects as any;
     const client = canvas.clients as any;
 
+    /*
+      A paused, signed-off or archived canvas is not a review any more, so the
+      link stops at PublicReview's closed page (see src/lib/reviewState.ts) and
+      this payload carries none of the content. It used to send the whole thing
+      with `commenting_enabled: false`, which handed `staging_url` to anyone
+      holding an old link and let them browse a site nobody had asked them to
+      look at.
+    */
+    const reviewState = canvas.status === "paused" ? "paused"
+      : canvas.status === "completed" ? "completed"
+      : canvas.status === "archived" ? "archived"
+      : "open";
+
+    if (reviewState !== "open") {
+      return new Response(JSON.stringify({
+        canvas: {
+          id: canvas.id,
+          name: canvas.name,
+          type: canvas.type,
+          status: canvas.status,
+          review_state: reviewState,
+          commenting_enabled: false,
+          project_name: proj?.name ?? "",
+          client_name: client?.company_name ?? client?.name ?? "",
+        },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({
       canvas: {
         id: canvas.id,
@@ -59,6 +87,7 @@ Deno.serve(async (req) => {
         staging_url: canvas.staging_url,
         file_url: canvas.file_url,
         status: canvas.status,
+        review_state: reviewState,
         proxy_enabled: canvas.proxy_enabled,
         widget_fallback_enabled: canvas.widget_fallback_enabled,
         commenting_enabled: canvas.commenting_enabled && !deadlinePassed && canvas.status === "active",

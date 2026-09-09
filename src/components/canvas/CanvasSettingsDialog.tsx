@@ -23,9 +23,9 @@ const isCanvasStatus = (v: string | null): v is CanvasStatus =>
 
 const STATUS_HELP: Record<string, string> = {
   active: "Guests can open the link and comment.",
-  paused: "The link opens, but commenting is closed.",
-  completed: "Signed off. Read-only for guests.",
-  archived: "Out of the way. Read-only for guests, hidden from the default list.",
+  paused: "The share link shows a “review paused” page. Reopening brings it straight back.",
+  completed: "Signed off. The share link shows a “review closed” page.",
+  archived: "Out of the way. The share link shows a “review archived” page, and it's hidden from the default list.",
 };
 
 /**

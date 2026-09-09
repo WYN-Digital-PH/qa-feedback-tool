@@ -18,6 +18,7 @@ import { IFRAME_PLACEHOLDER_HTML, postPinTheme } from "@/lib/reviewTheme";
 import { readOrCreateGuestToken } from "@/lib/guestToken";
 import { samePageUrl } from "@/lib/pageUrl";
 import { FEEDBACK_STATUSES, humanize } from "@/lib/feedbackMeta";
+import { REVIEW_CLOSED_COPY, REVIEW_UNAVAILABLE_COPY, reviewStateFor, type ReviewState } from "@/lib/reviewState";
 // Screenshot capture is performed server-side (Browserless) by the capture-screenshot edge function.
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -45,6 +46,12 @@ interface Canvas {
   type: "website" | "image" | "pdf";
   website_url: string | null;
   status: string;
+  /**
+   * Sent by `get-public-canvas`. Read through `reviewStateFor` rather than
+   * directly, so an older cached payload without the field still resolves from
+   * `status`.
+   */
+  review_state?: ReviewState;
   commenting_enabled: boolean;
   feedback_deadline: string | null;
   deadline_passed: boolean;
@@ -441,10 +448,22 @@ export default function PublicReview() {
   if (error || !canvas) {
     return (
       <ErrorState
-        title="Review link unavailable"
-        description={error ?? "This review link is invalid or has been removed."}
+        title={REVIEW_UNAVAILABLE_COPY.title}
+        description={REVIEW_UNAVAILABLE_COPY.description}
       />
     );
+  }
+
+  /*
+    Paused, signed off or archived: the review stops here rather than rendering
+    a canvas the reviewer is no longer invited to comment on. `get-public-canvas`
+    withholds the site and file URLs for these, so there is nothing to show even
+    if this branch were skipped.
+  */
+  const reviewState = canvas.review_state ?? reviewStateFor(canvas.status);
+  if (reviewState !== "open") {
+    const copy = REVIEW_CLOSED_COPY[reviewState];
+    return <ErrorState title={copy.title} description={copy.description} />;
   }
 
   // ============ Sidebar shared component ============
@@ -481,12 +500,12 @@ export default function PublicReview() {
       /*
         Editing is offered only while the canvas is open to guests.
 
-        `commenting_enabled` as returned by `get-public-canvas` already folds in
-        the canvas status and the deadline, so this covers paused, completed and
-        archived canvases as well as an explicitly closed one. These controls
-        used to render regardless: every endpoint behind them refused with a 403,
-        so the rule held, but the reviewer was invited to edit a comment on a
-        closed canvas and told no only after trying.
+        `commenting_enabled` as returned by `get-public-canvas` folds in the
+        deadline and the commenting toggle; a paused, signed-off or archived
+        canvas never reaches this component at all. These controls used to render
+        regardless: every endpoint behind them refused with a 403, so the rule
+        held, but the reviewer was invited to edit a comment on a closed canvas
+        and told no only after trying.
       */
       guestActions={canvas.commenting_enabled ? {
         // Labelled from the shared vocabulary — this list used to call `new`

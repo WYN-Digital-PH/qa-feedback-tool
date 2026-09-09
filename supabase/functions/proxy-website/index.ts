@@ -649,6 +649,23 @@ Deno.serve(async (req) => {
     if (!canvas) return new Response("Invalid share token", { status: 404, headers: corsHeaders });
     if (!canvas.proxy_enabled) return new Response("Proxy disabled", { status: 403, headers: corsHeaders });
 
+    /*
+      `status` was selected here from the first version but never read, so
+      pausing, signing off or archiving a canvas stopped the comment endpoints
+      and nothing else: this function went on fetching and serving the site to
+      anyone holding the share token. The review canvas is closed, so the proxy
+      behind it is too.
+    */
+    if (canvas.status !== "active") {
+      return new Response(JSON.stringify({
+        error: "review_closed",
+        status: canvas.status,
+        message: "This review is no longer open.",
+      }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Domain allowlist
     const allowedHosts: string[] = [];
     try { if (canvas.website_url) allowedHosts.push(new URL(canvas.website_url).hostname); } catch {}
