@@ -183,7 +183,7 @@ describe("the canvas status tally", () => {
   it("ignores a status the vocabulary no longer has", () => {
     // A row left behind by a migration that has not run yet must not be
     // counted into a bucket it does not belong to.
-    const tally = countByStatus([{ id: "x", status: "changes_needed" }]);
+    const tally = countByStatus([{ status: "changes_needed" }]);
     expect(tally.reduce((n, t) => n + t.count, 0)).toBe(0);
   });
 });

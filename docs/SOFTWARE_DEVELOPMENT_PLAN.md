@@ -66,6 +66,12 @@ Agency creates canvas ──► share link ──► client pins comments
   enforced by row-level security in Postgres, editable by the owner in
   Settings. The database is the authority; the UI mirrors it.
 - **In-app and desktop notifications** for assignment.
+- **Abuse and cost controls on the public surface** — the nine functions
+  reachable without a session are rate limited per IP and per share token, and
+  screenshot capture is capped per canvas and per month with an 80% notice to
+  owners. Both counters live in Postgres rather than in an edge isolate, so a
+  simultaneous burst gets exactly the limit through and no more. See
+  `DEPLOYMENT.md` §4.
 - **White-label ready** — brand identity from `VITE_BRAND_*` env vars, palette
   and type from CSS custom properties. No brand name is hardcoded in `src/`.
 
@@ -99,16 +105,19 @@ and `activity_logs`. **21 migrations**, applied in filename order.
 
 | Signal | Today |
 | --- | --- |
-| Test suite | **113 tests, 8 files, all passing** (~38s) |
-| What is covered | Permissions, assignment rules, entity fields, record lifecycle, pin anchoring, finish-review, design-system conventions |
-| What is not covered | **Every edge function. No integration test crosses the network boundary.** |
-| CI | **None.** No `.github/workflows`. Tests run only when someone remembers |
-| Lint | ESLint configured, run manually |
-| Type safety | Strict TypeScript; Supabase types generated |
+| Test suite | **404 tests, 23 files, all passing** (~30s) |
+| What is covered | Permissions, assignment rules, entity fields, record lifecycle, pin anchoring, finish-review, design-system conventions, responsive layout, mentions, the SSRF guard, rate-limit rules, screenshot caps |
+| Edge functions | Every one is parse-checked; the SSRF guard, rate-limit rules and cap arithmetic are unit-tested; two harnesses prove the limits against a live database. **No per-function behavioural suite yet** — see 1.2 |
+| CI | `.github/workflows/ci.yml` — typecheck, lint, test, build on every push and PR |
+| Lint | Budgeted at 147 (`npm run lint:budget`). New problems fail; the backlog is visible and only shrinks |
+| Type safety | Strict TypeScript, clean; Supabase types generated |
 
-The coverage gap is the honest headline: the logic most exposed to the public
-internet — eleven functions that accept unauthenticated writes — is the logic
-with no automated test at all.
+The coverage gap is narrower than it was but has not closed: the edge functions
+are checked for *shape* — that they parse, that a guard sits before the work,
+that a limit is where it claims to be — rather than exercised end to end. The
+four real bugs found in them recently (a function that never parsed, mentions
+that notified nobody, an SSRF bypass, an upload broken since the first commit)
+were all found by looking, not by a failing test. 1.2 is what changes that.
 
 ### In flight on `increment`
 
@@ -191,7 +200,7 @@ glamorous.
 
 | # | Work | Why it matters | Done when |
 | --- | --- | --- | --- |
-| 1.1 | **CI on every push and PR** — install, typecheck, lint, test, build | Nothing else in this plan is trustworthy without it | A red build blocks a merge |
+| 1.1 | ~~**CI on every push and PR**~~ — **done**, `.github/workflows/ci.yml`. Lint is budgeted at 147 rather than zero so the build is green from day one; see `DEPLOYMENT.md` §3 | Nothing else in this plan is trustworthy without it | A red build blocks a merge |
 | 1.2 | **Edge function test harness** — Deno tests for the eleven functions, covering the guest-token path, share-token validation, and archived/deleted canvas rejection | The public write surface is currently untested | Each function has at least a rejection test and a happy path |
 | 1.3 | **One end-to-end review journey** — create canvas, open share link as a guest, pin, reply, approve | The core promise of the product, verified once per build | Runs headless in CI |
 | 1.4 | **Purge screenshots with their feedback item** | Storage grows forever today; only the URL is tracked | Deleting an item removes its object, or a scheduled sweep does |

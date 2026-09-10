@@ -295,7 +295,9 @@ describe("a mention notifies the person named, and only them", () => {
 
   it("gives a mention its own kind and icon rather than borrowing assignment's", () => {
     const bell = readFileSync(resolvePath(process.cwd(), "src/components/NotificationBell.tsx"), "utf8");
-    expect(bell).toContain('n.kind === "comment_mention" ? "mention" : "assigned"');
+    // Assert the mapping, not the shape of the expression — other kinds have
+    // since been added to the same ternary.
+    expect(bell).toMatch(/n\.kind === "comment_mention" \? "mention"/);
     expect(bell).toContain("mention: AtSign");
   });
 });

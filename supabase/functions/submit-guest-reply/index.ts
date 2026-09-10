@@ -1,6 +1,7 @@
 // Public-safe endpoint allowing guests to reply to a feedback thread.
 // Requires share_token + feedback_item_id + body. Always stored as is_internal=false.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,11 @@ Deno.serve(async (req) => {
     if (!share_token || !feedback_item_id || !body || typeof body !== "string" || !body.trim()) {
       return new Response(JSON.stringify({ error: "Missing share_token, feedback_item_id, or body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    const limited = await enforceRateLimit(req, {
+      fn: "submit-guest-reply", shareToken: share_token, corsHeaders,
+    });
+    if (limited) return limited;
     if (body.length > 5000) {
       return new Response(JSON.stringify({ error: "Reply too long" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

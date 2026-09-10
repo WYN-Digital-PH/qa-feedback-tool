@@ -88,7 +88,7 @@ export default function Projects() {
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
     setSaving(true);
-    const { error } = await supabase.from("projects").insert({ name: form.name, client_id: form.client_id, created_by: user?.id });
+    const { error } = await supabase.from("projects").insert({ name: form.name.trim(), client_id: form.client_id, created_by: user?.id });
     setSaving(false);
     if (error) {
       toast.error(describeWriteError(error, { subject: "projects", hasRole: roles.length > 0 }));

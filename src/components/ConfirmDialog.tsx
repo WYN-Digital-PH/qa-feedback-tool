@@ -54,7 +54,17 @@ export function ConfirmDialog({
   const [typed, setTyped] = useState("");
   const [working, setWorking] = useState(false);
 
-  const locked = !!confirmPhrase && typed.trim() !== confirmPhrase;
+  /**
+   * Both sides are trimmed, not just what was typed.
+   *
+   * A project stored as `"P2-T3 "` renders as `P2-T3` — HTML collapses the
+   * trailing space — so the phrase on screen was one the user could not
+   * reproduce: `typed.trim()` never ends in a space, so the comparison could
+   * never succeed and the dialog could never be confirmed. Names are trimmed
+   * on write now, but any row created before that is still out there.
+   */
+  const required = confirmPhrase?.trim() ?? "";
+  const locked = !!required && typed.trim() !== required;
 
   function handleOpenChange(next: boolean) {
     if (!next) setTyped("");
@@ -86,7 +96,7 @@ export function ConfirmDialog({
         {confirmPhrase && (
           <div className="space-y-1.5">
             <Label htmlFor="confirm-phrase" className="font-normal">
-              Type <span className="font-medium text-foreground">{confirmPhrase}</span> to confirm
+              Type <span className="font-medium text-foreground">{required}</span> to confirm
             </Label>
             <Input id="confirm-phrase" value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)} />
           </div>

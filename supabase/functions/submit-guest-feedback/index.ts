@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const limited = await enforceRateLimit(req, {
+      fn: "submit-guest-feedback", shareToken: share_token, corsHeaders,
+    });
+    if (limited) return limited;
     if (comment.length > 5000) {
       return new Response(JSON.stringify({ error: "Comment too long" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

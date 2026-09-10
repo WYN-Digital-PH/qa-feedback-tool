@@ -2,6 +2,8 @@
 // Invoked asynchronously after a feedback item is inserted.
 // Expects: { feedback_item_id: string, internal_token: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
+import { resolveCaps, describeSkip, type QuotaVerdict } from "../_shared/screenshotCaps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,6 +150,11 @@ async function setStatus(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // Every call past here is a paid browserless render. Checked before the
+  // service-key comparison so guesses at that key are limited too.
+  const limited = await enforceRateLimit(req, { fn: "capture-screenshot", corsHeaders });
+  if (limited) return limited;
+
   const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const SUPA_URL = Deno.env.get("SUPABASE_URL")!;
   const BROWSERLESS_KEY = Deno.env.get("BROWSERLESS_API_KEY");
@@ -197,6 +204,64 @@ Deno.serve(async (req) => {
     });
     return new Response(JSON.stringify({ ok: false, reason: "no_provider" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Capture caps — checked before browserless, because past this point the
+  // render is billable whether or not anyone ever looks at the result.
+  //
+  // Both ceilings are consumed in one call, so a capture cannot pass the
+  // canvas check, fail the monthly one, and still have burnt a canvas slot.
+  // ---------------------------------------------------------------------
+  const caps = resolveCaps(Deno.env.toObject());
+  const { data: quotaRows, error: quotaErr } = await admin.rpc("screenshot_quota_consume", {
+    _canvas_id: item.canvas_id,
+    _canvas_limit: caps.canvas,
+    _monthly_limit: caps.monthly,
+  });
+
+  if (quotaErr) {
+    // Refuse rather than render. Unlike rate limiting — where failing open
+    // only risks extra load — failing open here spends money, and a capture
+    // deferred is recoverable in a way an unbounded bill is not.
+    console.error("[capture-screenshot] quota check failed, skipping", item.id, quotaErr.message);
+    await setStatus(admin, item.id, {
+      screenshot_status: "skipped",
+      screenshot_error: "Screenshot quota could not be checked; capture not attempted.",
+    });
+    return new Response(JSON.stringify({ ok: false, reason: "quota_unavailable" }), {
+      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const quota = (Array.isArray(quotaRows) ? quotaRows[0] : quotaRows) as QuotaVerdict;
+
+  if (!quota?.allowed) {
+    const detail = describeSkip(quota);
+    console.warn("[capture-screenshot] over cap, skipping", {
+      feedback_item_id: item.id,
+      canvas_id: item.canvas_id,
+      reason: quota?.reason,
+      canvas: `${quota?.canvas_used}/${quota?.canvas_limit}`,
+      month: `${quota?.month_used}/${quota?.month_limit}`,
+    });
+    await setStatus(admin, item.id, {
+      screenshot_status: "skipped",
+      screenshot_error: detail,
+    });
+    return new Response(
+      JSON.stringify({ ok: false, reason: quota?.reason ?? "over_cap", detail }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  if (quota.warned) {
+    // The database has already notified owners and admins; this is the trace
+    // in the function logs alongside it.
+    console.warn("[capture-screenshot] capture quota at 80%", {
+      canvas: `${quota.canvas_used}/${quota.canvas_limit}`,
+      month: `${quota.month_used}/${quota.month_limit}`,
     });
   }
 

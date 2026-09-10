@@ -153,7 +153,7 @@ export default function ProjectDetail() {
     const { data: canvas, error } = await supabase.from("canvases").insert({
       project_id: id,
       client_id: project?.client_id,
-      name: form.name,
+      name: form.name.trim(),
       type,
       website_url: type === "website" ? form.website_url : null,
       staging_url: type === "website" ? (form.staging_url || null) : null,

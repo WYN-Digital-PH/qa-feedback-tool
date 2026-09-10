@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,11 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const limited = await enforceRateLimit(req, {
+      fn: "get-public-canvas", shareToken, corsHeaders,
+    });
+    if (limited) return limited;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

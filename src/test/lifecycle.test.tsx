@@ -192,6 +192,60 @@ describe("ConfirmDeleteDialog", () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
   });
 
+  /**
+   * The reported bug: a project stored as `"P2-T3 "` could never be deleted.
+   *
+   * HTML collapses the trailing space, so the phrase on screen read `P2-T3`.
+   * The check trimmed only what was typed — `typed.trim() !== confirmPhrase` —
+   * and `typed.trim()` can never end in a space, so no input could ever unlock
+   * the button. The dialog was not merely awkward; it was impossible.
+   *
+   * Names are trimmed on write now, but rows created before that still exist,
+   * so the dialog has to cope with them.
+   */
+  it("accepts the name as displayed when the stored one has stray whitespace", async () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDeleteDialog
+        open
+        onOpenChange={() => {}}
+        title="Delete P2-T3?"
+        description="Everything goes."
+        confirmPhrase="P2-T3 "
+        onConfirm={onConfirm}
+      />,
+    );
+
+    // What is asked for on screen is the trimmed name...
+    expect(screen.getByText("P2-T3")).toBeInTheDocument();
+
+    const button = screen.getByRole("button", { name: "Delete" });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "P2-T3" } });
+    expect(button, "typing the name as shown must unlock the button").toBeEnabled();
+
+    fireEvent.click(button);
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
+  });
+
+  it("still refuses a name that is merely close", async () => {
+    // Trimming both sides must not turn the check into a loose match.
+    render(
+      <ConfirmDeleteDialog
+        open
+        onOpenChange={() => {}}
+        title="Delete P2-T3?"
+        description="Everything goes."
+        confirmPhrase="P2-T3 "
+        onConfirm={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Delete" });
+    for (const wrong of ["P2-T", "p2-t3", "P2-T33", "P2 T3"]) {
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: wrong } });
+      expect(button, `"${wrong}" must not unlock it`).toBeDisabled();
+    }
+  });
+
   it("confirms straight away when no phrase is required", async () => {
     const onConfirm = vi.fn();
     render(

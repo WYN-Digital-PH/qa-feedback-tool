@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { blockedReason, fetchGuarded } from "./ssrf.ts";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -622,6 +623,13 @@ Deno.serve(async (req) => {
     if (!shareToken || !targetUrl) {
       return new Response("Missing share_token or url", { status: 400, headers: corsHeaders });
     }
+
+    // Ahead of the SSRF guard and the outbound fetch: every call here pulls a
+    // whole external page through this function.
+    const limited = await enforceRateLimit(req, {
+      fn: "proxy-website", shareToken, corsHeaders,
+    });
+    if (limited) return limited;
 
     let target: URL;
     try { target = new URL(targetUrl); } catch {

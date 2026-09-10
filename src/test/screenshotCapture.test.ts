@@ -39,8 +39,9 @@ describe("a capture attempt cannot hang", () => {
   it("keeps the worst case inside an edge function's budget", () => {
     const perAttempt = Number(FN.match(/ATTEMPT_TIMEOUT_MS = ([\d_]+)/)![1].replace(/_/g, ""));
     const attempts = Number(FN.match(/MAX_ATTEMPTS = (\d+)/)![1]);
-    const backoff = (FN.match(/BACKOFF_MS = \[([^\]]+)\]/)![1].match(/[\d_]+/g) ?? [])
-      .reduce((a, b) => a + Number(b.replace(/_/g, "")), 0);
+    // Annotated: `?? []` alone infers never[], so the reduce below sees never.
+    const parts: string[] = FN.match(/BACKOFF_MS = \[([^\]]+)\]/)![1].match(/[\d_]+/g) ?? [];
+    const backoff = parts.reduce((a, b) => a + Number(b.replace(/_/g, "")), 0);
     expect(perAttempt * attempts + backoff).toBeLessThanOrEqual(150_000);
   });
 });

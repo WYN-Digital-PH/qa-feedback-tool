@@ -2,6 +2,7 @@
 // feedback item / reply, and change status on their own feedback item.
 // Authorization is gated by the per-row guest_token saved at creation time.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,11 @@ Deno.serve(async (req) => {
     if (!share_token || !isUuid(guest_token) || !action || !target || !target_id) {
       return json({ error: "Missing or invalid params" }, 400);
     }
+
+    const limited = await enforceRateLimit(req, {
+      fn: "guest-feedback-mutate", shareToken: share_token, corsHeaders,
+    });
+    if (limited) return limited;
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: canvas } = await admin

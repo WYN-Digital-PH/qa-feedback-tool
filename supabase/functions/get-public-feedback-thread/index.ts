@@ -1,6 +1,7 @@
 // Returns public-safe replies (is_internal=false) for a feedback item, scoped by share_token.
 // Never exposes internal notes, assignees, or user emails.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { enforceRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,11 @@ Deno.serve(async (req) => {
     if (!shareToken || !feedbackId) {
       return new Response(JSON.stringify({ error: "Missing params" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    const limited = await enforceRateLimit(req, {
+      fn: "get-public-feedback-thread", shareToken, corsHeaders,
+    });
+    if (limited) return limited;
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: canvas } = await admin.from("canvases").select("id").eq("share_token", shareToken).maybeSingle();
     if (!canvas) return new Response(JSON.stringify({ error: "Invalid share token" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });

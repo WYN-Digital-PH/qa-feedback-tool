@@ -1,0 +1,89 @@
+name: CI
+
+# Every push and every pull request. The point is that nothing reaches `main`
+# without having been typechecked, linted, tested and built at least once —
+# see docs/SOFTWARE_DEVELOPMENT_PLAN.md §4, item 1.1.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  # Needed by the `prove` job below, which is gated on it.
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the version this is developed on. `npm` caching keys off
+          # package-lock.json, which is why `npm ci` below is the install.
+          node-version: "22"
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly what the
+      # lockfile says and fails if package.json and the lockfile disagree.
+      # A CI that quietly resolves different versions is not verifying the
+      # thing that will be deployed.
+      - name: Install
+        run: npm ci
+
+      # Ordered cheapest-first, so an obvious break reports in seconds rather
+      # than after a four-minute build.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Budgeted, not zero — see scripts/lintBudget.mjs. New problems fail;
+      # the 147 that predate this check do not.
+      - name: Lint
+        run: npm run lint:budget
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+        env:
+          # The build inlines these, so it needs *something* present or Vite
+          # emits a bundle that cannot construct its Supabase client. These are
+          # placeholders: CI proves the build compiles, not that it can reach a
+          # real project. Nothing here is a secret.
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
+          VITE_SUPABASE_PROJECT_ID: placeholder
+
+  # Deliberately separate: these need real credentials and touch a live
+  # database, so they cannot run on a pull request from a fork. Run them by
+  # hand from the Actions tab, or on a schedule once the secrets are set.
+  prove:
+    name: prove rate limits and screenshot caps
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Rate limits
+        run: node scripts/proveRateLimit.mjs --http
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Screenshot caps
+        run: node scripts/proveScreenshotCaps.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
